@@ -27,7 +27,6 @@ const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
 const stageEl = $<HTMLDivElement>("stage");
 const dropZone = $<HTMLDivElement>("dropZone");
 const fileInput = $<HTMLInputElement>("fileInput");
-const fontInput = $<HTMLInputElement>("fontInput");
 const timeSlider = $<HTMLInputElement>("timeSlider");
 const timeVal = $<HTMLSpanElement>("timeVal");
 const playBtn = $<HTMLButtonElement>("playBtn");
@@ -245,17 +244,20 @@ $<HTMLButtonElement>("shapeShuffle").addEventListener("click", () => {
 
 type NumKey =
   | "unit"
-  | "movement"
+  | "moveMin"
+  | "moveMax"
+  | "travelMin"
+  | "travelMax"
+  | "floatCount"
+  | "floatMin"
+  | "floatMax"
   | "duration"
-  | "moveDuration"
   | "stagger"
   | "holeSize"
   | "holeVariation"
   | "holdClosed"
   | "holdOpen"
-  | "imageZoom"
-  | "imageX"
-  | "imageY";
+  | "imageZoom";
 
 interface SliderDef {
   key: NumKey;
@@ -266,22 +268,29 @@ interface SliderDef {
   format: (v: number) => string;
   container: string;
   title?: string;
+  pairMin?: NumKey; // this slider is a maximum; keep it >= pairMin
+  pairMax?: NumKey; // this slider is a minimum; keep it <= pairMax
 }
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 const secs = (v: number) => `${v.toFixed(2)} s`;
+const units = (v: number) => `${v.toFixed(1)} u`;
+const px = (v: number) => `${v.toFixed(0)}px`;
 const sliderDefs: SliderDef[] = [
-  { key: "unit", label: "Block unit", min: 12, max: 160, step: 1, format: (v) => `${v.toFixed(0)}px`, container: "blockSliders", title: "Width of one block unit at 1x; rows use 1, 2 or 3 units" },
-  { key: "movement", label: "Block motion", min: 0, max: 1, step: 0.01, format: pct, container: "blockSliders", title: "Sideways drift and extra width changes between the opening and the closing; 0 freezes the holds" },
-  { key: "moveDuration", label: "Block move length", min: 0.5, max: 6, step: 0.05, format: secs, container: "blockSliders", title: "Spacing of the block keyframes; the reference glides for about 3 s per change" },
+  { key: "unit", label: "Block unit", min: 12, max: 160, step: 1, format: px, container: "blockSliders", title: "Width of one block unit at 1x; rows use 1, 2 or 3 units" },
+  { key: "moveMin", label: "Move length min", min: 0.3, max: 8, step: 0.05, format: secs, container: "blockSliders", pairMax: "moveMax", title: "Shortest keyframe transition; each move picks a length between min and max" },
+  { key: "moveMax", label: "Move length max", min: 0.3, max: 8, step: 0.05, format: secs, container: "blockSliders", pairMin: "moveMin" },
+  { key: "travelMin", label: "Travel min", min: 0, max: 400, step: 1, format: px, container: "blockSliders", pairMax: "travelMax", title: "Smallest sideways step per keyframe, at 1x" },
+  { key: "travelMax", label: "Travel max", min: 0, max: 400, step: 1, format: px, container: "blockSliders", pairMin: "travelMin", title: "Largest sideways step per keyframe; the drift stays within this distance" },
+  { key: "floatCount", label: "Per row", min: 0, max: 8, step: 1, format: (v) => v.toFixed(0), container: "floatSliders", title: "Free blocks inside each open row; they grow, shrink and drift with the move and travel ranges" },
+  { key: "floatMin", label: "Size min", min: 0.2, max: 8, step: 0.1, format: units, container: "floatSliders", pairMax: "floatMax" },
+  { key: "floatMax", label: "Size max", min: 0.2, max: 8, step: 0.1, format: units, container: "floatSliders", pairMin: "floatMin" },
   { key: "duration", label: "Duration", min: 0.1, max: 4, step: 0.05, format: secs, container: "openSliders" },
   { key: "stagger", label: "Stagger per row", min: 0, max: 1, step: 0.01, format: secs, container: "openSliders" },
-  { key: "holeSize", label: "Hole width", min: 0, max: 1, step: 0.01, format: pct, container: "shapeSliders", title: "How far the seam rows open, as a share of the width" },
+  { key: "holeSize", label: "Hole width", min: 0, max: 1, step: 0.01, format: pct, container: "shapeSliders", title: "How far the rows open; 100% leaves no blocks" },
   { key: "holeVariation", label: "Hole irregularity", min: 0, max: 1, step: 0.01, format: pct, container: "shapeSliders", title: "Random extra steps per row and side; the hole never widens away from the seam" },
   { key: "holdClosed", label: "Hold closed", min: 0, max: 6, step: 0.05, format: secs, container: "timeSliders" },
   { key: "holdOpen", label: "Hold open", min: 0, max: 12, step: 0.05, format: secs, container: "timeSliders" },
   { key: "imageZoom", label: "Zoom", min: 1, max: 3, step: 0.01, format: pct, container: "imageSliders" },
-  { key: "imageX", label: "Position X", min: -1, max: 1, step: 0.01, format: (v) => v.toFixed(2), container: "imageSliders" },
-  { key: "imageY", label: "Position Y", min: -1, max: 1, step: 0.01, format: (v) => v.toFixed(2), container: "imageSliders" },
 ];
 const numParams = params as unknown as Record<NumKey, number>;
 const sliderInputs: Partial<Record<NumKey, HTMLInputElement>> = {};
@@ -317,6 +326,14 @@ function renderSlider(def: SliderDef) {
   label();
   input.addEventListener("input", () => {
     numParams[def.key] = parseFloat(input.value);
+    if (def.pairMax && numParams[def.pairMax] < numParams[def.key]) {
+      numParams[def.pairMax] = numParams[def.key];
+      syncSlider(def.pairMax);
+    }
+    if (def.pairMin && numParams[def.pairMin] > numParams[def.key]) {
+      numParams[def.pairMin] = numParams[def.key];
+      syncSlider(def.pairMin);
+    }
     label();
     rebuild();
   });
@@ -448,79 +465,14 @@ function bindText(id: string, apply: (v: string) => void) {
 const artistEl = bindText("artistText", (v) => (params.artist = v));
 const stageTextEl = bindText("stageText", (v) => (params.stage = v));
 const dateEl = bindText("dateText", (v) => (params.date = v));
-const fontFamilyEl = $<HTMLInputElement>("fontFamily");
-const fontStatusEl = $<HTMLSpanElement>("fontStatus");
-const fileFonts = new Set<string>();
-const requestedFonts = new Map<string, Promise<void>>();
-
-/** Google Fonts stylesheet for a family: try weight 800, fall back to the bare family. */
-function ensureGoogleFont(family: string): Promise<void> {
-  const f = family.trim();
-  if (!f || fileFonts.has(f)) return Promise.resolve();
-  const existing = requestedFonts.get(f);
-  if (existing) return existing;
-  const base = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(f).replace(/%20/g, "+")}`;
-  const p = new Promise<void>((resolve) => {
-    const add = (href: string, onFail: () => void) => {
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = href;
-      link.onload = () => resolve();
-      link.onerror = () => {
-        link.remove();
-        onFail();
-      };
-      document.head.appendChild(link);
-    };
-    add(`${base}:wght@700&display=swap`, () => add(`${base}&display=swap`, () => resolve()));
-  });
-  requestedFonts.set(f, p);
-  return p;
-}
-function fontLoaded(family: string): boolean {
-  for (const face of document.fonts) {
-    if (face.family.replace(/["']/g, "") === family && face.status === "loaded") return true;
-  }
-  return false;
-}
 async function waitForFont(family: string) {
-  await ensureGoogleFont(family);
   try {
     await document.fonts.load(`700 100px "${family}"`);
   } catch {
     /* fall back silently */
   }
-  fontStatusEl.textContent = fontLoaded(family) ? "loaded" : "not found, using fallback";
   schedule();
 }
-let fontTimer = 0;
-fontFamilyEl.addEventListener("input", () => {
-  params.fontFamily = fontFamilyEl.value.trim() || "Avantt";
-  fontStatusEl.textContent = "loading";
-  schedule();
-  window.clearTimeout(fontTimer);
-  fontTimer = window.setTimeout(() => waitForFont(params.fontFamily), 400);
-});
-$<HTMLButtonElement>("fontLoadBtn").addEventListener("click", () => fontInput.click());
-fontInput.addEventListener("change", async () => {
-  const file = fontInput.files?.[0];
-  fontInput.value = "";
-  if (!file) return;
-  const family = file.name.replace(/\.[^.]+$/, "");
-  try {
-    const face = new FontFace(family, await file.arrayBuffer(), { weight: "700" });
-    await face.load();
-    document.fonts.add(face);
-    fileFonts.add(family);
-    params.fontFamily = family;
-    fontFamilyEl.value = family;
-    fontStatusEl.textContent = "loaded from file";
-    schedule();
-  } catch (err) {
-    console.error("[font]", err);
-    alert("Could not load that font file.");
-  }
-});
 document.fonts.addEventListener("loadingdone", () => schedule());
 
 // ---------- colours ----------
@@ -699,8 +651,6 @@ stageEl.addEventListener("pointermove", (e) => {
   const c = coverRect(image, W, H, params.imageZoom, 0, 0);
   if (c.dw - W > 1) params.imageX = clamp(params.imageX - dx / ((c.dw - W) / 2), -1, 1);
   if (c.dh - H > 1) params.imageY = clamp(params.imageY - dy / ((c.dh - H) / 2), -1, 1);
-  syncSlider("imageX");
-  syncSlider("imageY");
   schedule();
 });
 for (const ev of ["pointerup", "pointercancel"]) {
@@ -787,7 +737,14 @@ function applySettings(str: string): boolean {
     params.easing = (obj.easing as number[]).map((x) => clamp(x, 0, 1)) as Bezier;
     applied++;
   }
-  for (const k of ["artist", "stage", "date", "fontFamily"] as const) {
+  for (const k of ["imageX", "imageY"] as const) {
+    const v = obj[k];
+    if (typeof v === "number" && Number.isFinite(v)) {
+      params[k] = clamp(v, -1, 1);
+      applied++;
+    }
+  }
+  for (const k of ["artist", "stage", "date"] as const) {
     if (typeof obj[k] === "string") {
       params[k] = (obj[k] as string).slice(0, 200);
       applied++;
@@ -804,10 +761,8 @@ function applySettings(str: string): boolean {
     }
   }
   if (!applied) return false;
-  if (!params.fontFamily) params.fontFamily = "Avantt";
   syncUI();
   applyFormat();
-  waitForFont(params.fontFamily);
   rebuild();
   return true;
 }
@@ -846,7 +801,6 @@ function syncUI() {
   artistEl.value = params.artist;
   stageTextEl.value = params.stage;
   dateEl.value = params.date;
-  fontFamilyEl.value = params.fontFamily;
   for (const k of Object.keys(colorLabels) as (keyof Colors)[]) {
     const ci = colorInputs[k];
     if (ci) {

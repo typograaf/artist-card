@@ -14,8 +14,7 @@
   </head>
   <body>
     <input type="file" id="fileInput" accept="image/*" hidden />
-    <input type="file" id="fontInput" accept=".ttf,.otf,.woff,.woff2" hidden />
-
+    
     <div id="app">
       <header class="page-header">
         <a href="/" class="brand">
@@ -43,7 +42,7 @@
               <button type="button" class="surface-btn" id="imageRemoveBtn" disabled>Remove</button>
             </div>
             <div class="sliders" id="imageSliders"></div>
-            <div class="hint">Drag the preview to reposition the photo.</div>
+            <div class="hint">Drag the preview to reposition the photo, scroll to zoom the preview.</div>
           </section>
 
           <section class="group">
@@ -51,11 +50,6 @@
             <label class="field"><span>Artist</span><input type="text" id="artistText" class="text-input" value="Kaytranada" /></label>
             <label class="field"><span>Stage</span><input type="text" id="stageText" class="text-input" value="MAIN STAGE" /></label>
             <label class="field"><span>Date</span><input type="text" id="dateText" class="text-input" value="Vendredi 28.08" /></label>
-            <label class="field">
-              <span class="field-head"><span>Label font (bundled or Google Fonts name)</span><span class="field-status" id="fontStatus"></span></span>
-              <input type="text" id="fontFamily" class="text-input" value="Avantt" />
-            </label>
-            <button type="button" class="surface-btn" id="fontLoadBtn">Load font file</button>
           </section>
 
           <section class="group">
@@ -123,6 +117,11 @@
               <label class="field"><span>Shape seed</span><input type="number" id="shapeSeed" value="3" min="0" max="999999" step="1" title="How far each row's two halves slide apart" /></label>
               <button type="button" class="surface-btn" id="shapeShuffle">Shuffle</button>
             </div>
+          </section>
+
+          <section class="group">
+            <label class="group-title">Floating blocks</label>
+            <div class="sliders" id="floatSliders"></div>
           </section>
 
           <section class="group">

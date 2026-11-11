@@ -30,12 +30,17 @@ export interface Params {
   unit: number; // block unit in px at 1x
   focus: Focus; // this half gets one unit thicker blocks (2/3/4 vs 1/2/3)
   blockSeed: number;
-  movement: number; // 0..1 block motion: drift amplitude + extra width keyframes
-  holeSize: number; // 0..1 of half the width
+  moveMin: number; // s, shortest block keyframe transition
+  moveMax: number; // s, longest
+  travelMin: number; // px at 1x, smallest sideways step per keyframe
+  travelMax: number; // px at 1x, largest
+  floatCount: number; // floating blocks per open row
+  floatMin: number; // units, smallest floating block
+  floatMax: number; // units, largest
+  holeSize: number; // 0..1; 1 = every row fully open
   holeVariation: number; // 0..1
   shapeSeed: number;
   duration: number; // s, one row's open/close transition
-  moveDuration: number; // s, one block-width transition (reference ~3 s)
   stagger: number; // s between row ranks
   staggerOrder: StaggerOrder;
   easing: Bezier;
@@ -47,7 +52,7 @@ export interface Params {
   date: string;
   fontFamily: string;
   imageZoom: number; // 1..
-  imageX: number; // -1..1
+  imageX: number; // -1..1 (set by dragging the preview)
   imageY: number; // -1..1
 }
 
@@ -67,12 +72,17 @@ export const DEFAULT_PARAMS: Params = {
   unit: 40,
   focus: "top",
   blockSeed: 7,
-  movement: 0.75,
-  holeSize: 1,
+  moveMin: 1.8,
+  moveMax: 3.6,
+  travelMin: 30,
+  travelMax: 120,
+  floatCount: 0,
+  floatMin: 1,
+  floatMax: 2.5,
+  holeSize: 0.9,
   holeVariation: 0.3,
   shapeSeed: 3,
   duration: 1.6,
-  moveDuration: 2.6,
   stagger: 0.15,
   staggerOrder: "center",
   easing: [0.7, 0.1, 0.1, 0.9],
@@ -160,6 +170,13 @@ export interface Key {
   v: number;
 }
 
+export interface Floater {
+  x0: number; // px at 1x, relative to the seam
+  useB: boolean; // block colour (true) or base colour
+  widthKeys: Key[]; // px at 1x
+  shiftKeys: Key[]; // px at 1x
+}
+
 export interface RowSpec {
   index: number;
   half: Focus;
@@ -175,6 +192,7 @@ export interface RowSpec {
   holeR: number;
   widthKeys: Key[]; // multiplier chain over [openAt, openAt + total]
   shiftKeys: Key[]; // sideways drift (px at 1x) over [0, total]
+  floaters: Floater[];
 }
 
 export interface Timeline {
@@ -221,6 +239,62 @@ function nextValue(cur: number, avoid: number, r: number): number {
   return pool[Math.min(pool.length - 1, Math.floor(r * pool.length))];
 }
 
+/**
+ * Random durations in [min, max] that fill `span` exactly (scaled to fit).
+ * Returns the cumulative keyframe times after `start`, excluding the end.
+ */
+function fillSpan(
+  start: number,
+  span: number,
+  min: number,
+  max: number,
+  r: (i: number) => number,
+): number[] {
+  if (span <= 0) return [];
+  const durs: number[] = [];
+  let acc = 0;
+  let i = 0;
+  while (acc < span && i < 400) {
+    const d = min + r(i) * (max - min);
+    durs.push(d);
+    acc += d;
+    i++;
+  }
+  const k = span / acc;
+  const times: number[] = [];
+  let t = start;
+  for (let j = 0; j < durs.length - 1; j++) {
+    t += durs[j] * k;
+    times.push(t);
+  }
+  return times;
+}
+
+/** Seamless sideways drift chain over [0, T]: steps of travelMin..travelMax, bounded. */
+function driftChain(
+  T: number,
+  moveMin: number,
+  moveMax: number,
+  travelMin: number,
+  travelMax: number,
+  r: (i: number) => number,
+): Key[] {
+  const keys: Key[] = [{ t: 0, v: 0 }];
+  if (travelMax > 0) {
+    const times = fillSpan(0, T, moveMin, moveMax, (i) => r(1000 + i));
+    let v = 0;
+    times.forEach((t, i) => {
+      let delta = travelMin + r(2000 + i) * (travelMax - travelMin);
+      if (r(3000 + i) < 0.5) delta = -delta;
+      if (Math.abs(v + delta) > travelMax) delta = -delta;
+      v += delta;
+      keys.push({ t, v });
+    });
+  }
+  keys.push({ t: T, v: 0 });
+  return keys;
+}
+
 export function buildScene(p: Params): Scene {
   const [W, H] = FORMATS[p.format];
   const nTop = clampInt(p.rowsTop, 1, 24);
@@ -251,6 +325,7 @@ export function buildScene(p: Params): Scene {
       holeR: 0,
       widthKeys: [],
       shiftKeys: [],
+      floaters: [],
     });
   }
   const maxRank = rows.reduce((m, r) => Math.max(m, r.rank), 0);
@@ -260,8 +335,16 @@ export function buildScene(p: Params): Scene {
   const tClose = tOpenEnd + p.holdOpen;
   const tCloseEnd = tClose + p.duration + span;
   const tl: Timeline = { tOpen, tOpenEnd, tClose, tCloseEnd, total: tCloseEnd, span };
+  const T = tl.total;
+
+  const moveMin = Math.max(0.2, Math.min(p.moveMin, p.moveMax));
+  const moveMax = Math.max(moveMin, p.moveMax);
+  const travelMin = Math.max(0, Math.min(p.travelMin, p.travelMax));
+  const travelMax = Math.max(travelMin, p.travelMax);
 
   const q = 2 * p.unit; // hole edges snap to this grid
+  // Above 90% the hole blends to the full width, so 100% shows no blocks.
+  const full = clamp01((p.holeSize - 0.9) / 0.1);
   for (const r of rows) {
     const k = r.index;
     r.delay = p.stagger * r.rank;
@@ -269,7 +352,6 @@ export function buildScene(p: Params): Scene {
 
     // Stripe phase: stratified so neighbouring rows don't form a staircase.
     r.phase = ((((k * 0.618) % 1) + rand(p.blockSeed, k, 1) * 0.6) % 1) * 2;
-    // Closed-state width multiplier, nudged away from the row above.
     r.m0 = 1 + Math.floor(rand(p.blockSeed, k, 2) * 3);
     if (k > 0 && r.m0 === rows[k - 1].m0 && rand(p.blockSeed, k, 4) < 0.6) {
       r.m0 = pickStep(r.m0, rand(p.blockSeed, k, 5));
@@ -278,12 +360,13 @@ export function buildScene(p: Params): Scene {
     // Opening shape: a stepped hill peaking at the seam, plus seeded +-steps.
     const yc = (r.y0 + r.y1) / 2;
     const env = 1 - 0.6 * (Math.abs(yc - H / 2) / (H / 2));
-    const base = Math.round(((W / 2) * p.holeSize * env) / q) * q;
+    const base = Math.round(((W / 2) * Math.min(1, p.holeSize) * env) / q) * q;
     const sides: ("holeL" | "holeR")[] = ["holeL", "holeR"];
     sides.forEach((side, si) => {
       const noise = rand(p.shapeSeed, k, 10 + si) * 2 - 1;
       const steps = Math.round(noise * p.holeVariation * 3);
-      r[side] = Math.max(0, Math.min(W / 2, base + steps * q));
+      const stepped = Math.max(0, Math.min(W / 2, base + steps * q));
+      r[side] = stepped + (W / 2 - stepped) * full;
     });
   }
   // The hole never widens again as it moves away from the seam.
@@ -300,75 +383,61 @@ export function buildScene(p: Params): Scene {
   // continuous curve: the pattern drifts sideways while its block width
   // changes, scaling about a point that is not the seam (so left and right
   // move differently), and no edge ever sits still. Both quantities are
-  // keyframe chains joined by the opening easing, like easy-eased keyframes:
-  // the width chain starts a transition with the row's opening and another
-  // with its closing (same stagger as the hole), the drift chain runs free.
-  const D = Math.max(0.2, p.moveDuration);
-  const T = tl.total;
+  // keyframe chains joined by the opening easing, like easy-eased keyframes
+  // with random spacing in [moveMin, moveMax]: the width chain starts a
+  // transition with the row's opening and another with its closing (same
+  // stagger as the hole), the drift chain runs free.
   for (const r of rows) {
     const k = r.index;
-    const jit = (key: number) => 0.75 + rand(p.blockSeed, k, key) * 0.5;
+    const rr = (key: number) => rand(p.blockSeed, k, key);
     const openAt = tOpen + r.delay;
     const closeAt = tClose + r.closeDelay;
-    r.anchor = W * (0.3 + 0.4 * rand(p.blockSeed, k, 7));
+    r.anchor = W * (0.3 + 0.4 * rr(7));
 
-    // width chain
     const keys: Key[] = [{ t: openAt, v: r.m0 }];
     let v = r.m0;
     const openSpan = closeAt - openAt;
-    let t = openAt + Math.min(D * jit(100), openSpan * 0.6);
-    v = pickStep(v, rand(p.blockSeed, k, 3));
+    let t = openAt + Math.min(moveMin + rr(100) * (moveMax - moveMin), openSpan * 0.6);
+    v = pickStep(v, rr(3));
     keys.push({ t, v });
-    const L = closeAt - t;
-    if (p.movement > 0) {
-      const n = Math.max(0, Math.round((p.movement * L) / D));
-      const weights: number[] = [];
-      let sum = 0;
-      for (let j = 0; j <= n; j++) {
-        const wgt = jit(110 + j);
-        weights.push(wgt);
-        sum += wgt;
-      }
-      for (let j = 0; j < n; j++) {
-        t += (L * weights[j]) / sum;
-        v = pickStep(v, rand(p.blockSeed, k, 130 + j));
-        keys.push({ t, v });
-      }
-      // the value reached when the closing starts: not the loop value, so
-      // the closing transition is a real move
-      v = nextValue(v, r.m0, rand(p.blockSeed, k, 150));
-    }
+    const times = fillSpan(t, closeAt - t, moveMin, moveMax, (i) => rr(110 + i));
+    times.forEach((tk, i) => {
+      v = pickStep(v, rr(130 + i));
+      keys.push({ t: tk, v });
+    });
+    // the value reached when the closing starts is never the loop value,
+    // so the closing transition is a real move
+    v = nextValue(v, r.m0, rr(150));
     keys.push({ t: closeAt, v });
     keys.push({ t: openAt + T, v: r.m0 });
     r.widthKeys = keys;
+    r.shiftKeys = driftChain(T, moveMin, moveMax, travelMin, travelMax, rr);
 
-    // sideways drift chain over [0, T], seamless
-    const base = p.unit * (r.half === p.focus ? 3 : 2);
-    const shift: Key[] = [{ t: 0, v: 0 }];
-    if (p.movement > 0) {
-      const durs: number[] = [];
-      let acc = 0;
-      let j = 0;
-      while (acc < T) {
-        const dd = D * (0.7 + rand(p.blockSeed, k, 200 + j) * 0.8);
-        durs.push(dd);
-        acc += dd;
-        j++;
-      }
-      const scaleT = T / acc;
-      let tt = 0;
-      let sv = 0;
-      for (let i = 0; i < durs.length - 1; i++) {
-        tt += durs[i] * scaleT;
-        let delta = (0.4 + 0.6 * rand(p.blockSeed, k, 230 + i)) * base * p.movement;
-        if (rand(p.blockSeed, k, 260 + i) < 0.5) delta = -delta;
-        if (Math.abs(sv + delta) > base) delta = -delta;
-        sv += delta;
-        shift.push({ t: tt, v: sv });
+    // Floating blocks: free rectangles inside the hole, growing, shrinking
+    // and drifting on their own chains; clipped to the hole so they are born
+    // out of the seam and swallowed by it.
+    const count = clampInt(p.floatCount, 0, 8);
+    const reach = Math.min(r.holeL, r.holeR);
+    if (count > 0 && reach > p.unit) {
+      const fmin = Math.max(0.1, Math.min(p.floatMin, p.floatMax)) * p.unit;
+      const fmax = Math.max(fmin, p.floatMax * p.unit);
+      for (let j = 0; j < count; j++) {
+        const fr = (key: number) => rand(p.blockSeed, k, 5000 + j * 100 + key);
+        const lane = (j + 0.5) / count; // spread across the hole, then jitter
+        const x0 = -reach * 0.8 + (reach * 1.6 * (lane + (fr(1) - 0.5) * 0.6));
+        const wk: Key[] = [{ t: 0, v: 0 }];
+        const wtimes = fillSpan(0, T, moveMin, moveMax, (i) => fr(10 + i));
+        wtimes.forEach((tk, i) => wk.push({ t: tk, v: fmin + fr(40 + i) * (fmax - fmin) }));
+        wk[0].v = fmin + fr(2) * (fmax - fmin);
+        wk.push({ t: T, v: wk[0].v });
+        r.floaters.push({
+          x0,
+          useB: j % 2 === 0,
+          widthKeys: wk,
+          shiftKeys: driftChain(T, moveMin, moveMax, travelMin, travelMax, (i) => fr(60 + i)),
+        });
       }
     }
-    shift.push({ t: T, v: 0 });
-    r.shiftKeys = shift;
   }
 
   // The artist name has its own clock: it starts a beat after the bottom row
@@ -614,9 +683,24 @@ export function render(
     const h = y1 - y0;
     const cA = r.half === "top" ? p.colors.topA : p.colors.bottomA;
     const cB = r.half === "top" ? p.colors.topB : p.colors.bottomB;
+    const left = Math.round(cx - holeL);
+    const right = Math.round(cx + holeR);
     // each half carries its pattern along with its hole edge
-    drawStripes(ctx, origin - holeL, 0, Math.round(cx - holeL), y0, h, w, r.phase, cA, cB);
-    drawStripes(ctx, origin + holeR, Math.round(cx + holeR), W, y0, h, w, r.phase, cA, cB);
+    drawStripes(ctx, origin - holeL, 0, left, y0, h, w, r.phase, cA, cB);
+    drawStripes(ctx, origin + holeR, right, W, y0, h, w, r.phase, cA, cB);
+    if (r.floaters.length && right - left > 1) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(left, y0, right - left, h);
+      ctx.clip();
+      for (const f of r.floaters) {
+        const fw = evalChain(scene, f.widthKeys, t) * scale;
+        const fx = cx + (f.x0 + evalChain(scene, f.shiftKeys, t)) * scale;
+        ctx.fillStyle = f.useB ? cB : cA;
+        ctx.fillRect(fx - fw / 2, y0, fw, h);
+      }
+      ctx.restore();
+    }
   }
 
   // Labels. Stage + date live on the closed card and fold into the seam as
@@ -626,7 +710,7 @@ export function render(
   const nTop = scene.rows.filter((r) => r.half === "top").length;
   const pSeamTop = progress[nTop - 1] ?? 0;
   const pSeamBot = progress[nTop] ?? pSeamTop;
-  const fam = p.fontFamily || "Manrope";
+  const fam = p.fontFamily || "Avantt";
   const foldOut = (pr: number) => Math.min(1, pr / 0.3);
   const slide = 0.11 * S;
 

@@ -17,33 +17,35 @@ npm run build    # dist/
 ## Controls
 
 - **Format** 4:5, 16:9, 9:16, 1:1 (1080-based canvases, export at 1x or 2x).
-- **Background image** load / remove, cover-fit with zoom and position;
-  drag the preview to reposition.
-- **Text** artist, stage, date; label font by Google Fonts name (weight 800
-  when the family has it) or a local font file.
+- **Background image** load / remove, cover-fit with zoom; drag the preview
+  to reposition.
+- **Text** artist, stage, date. Labels are set in Avantt Bold at -2%
+  tracking (the reference's font); the font files are expected in
+  `public/fonts/` and are not part of the repo (licensed).
 - **Timeline** hold closed / hold open; the loop is closed hold, open, open
   hold, close. Space plays and pauses, the Time slider scrubs, arrow keys
   step one frame (Shift: ten), Home goes to the start.
 - **Rows** top / bottom counts. **Thick blocks** picks the half whose blocks
   are one unit thicker (2/3/4 units instead of 1/2/3, as measured in the
   reference).
-- **Blocks** unit size, block motion, block move length, seed. Each row's
-  pattern is never still: its block width glides between 1, 2 and 3 units
-  (one unit more on the thick half) and the whole pattern drifts sideways,
-  both as chains of easy-eased keyframes spaced about "Block move length"
-  apart and joined by the opening easing. The width chain starts a
-  transition with the row's opening and another with its closing (same
-  stagger as the hole, running on across the loop point); the drift chain
-  runs free and seamless. The pattern scales about a seeded point away from
-  the seam, so the left and right halves move differently, as in the video.
-  "Block motion" sets the drift amplitude and keyframe density; 0 freezes
-  the holds.
+- **Blocks** unit size, move length min/max, travel min/max, seed. Each
+  row's pattern is never still: its block width glides between 1, 2 and 3
+  units and the whole pattern drifts sideways, both as chains of easy-eased
+  keyframes with random spacing between the two move lengths and sideways
+  steps between the two travel distances, joined by the opening easing. The
+  width chain starts a transition with the row's opening and another with
+  its closing (same stagger as the hole, running on across the loop point);
+  the drift chain runs free and seamless. The pattern scales about a seeded
+  point away from the seam, so left and right halves move differently.
+- **Floating blocks** per-row count (0 = none) and size min/max in units:
+  free blocks inside each open row that grow, shrink and drift on the same
+  move and travel ranges, clipped to the hole.
 - **Opening** duration, stagger per row, stagger order (closing runs in the
   reverse order, outer rows first, like the reference), easing (presets or a
   custom cubic-bezier; the same curve drives the block moves).
 - **Opening shape** hole width, irregularity and seed: how far each row's two
   halves slide apart, snapped to a 2-unit grid, never widening away from the
-  seam.
+  seam; 100% opens every row fully.
 - **Colours** the two pairs plus label background and text.
 - **Settings** copy / paste the whole state as JSON (values are clamped).
 
