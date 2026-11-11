@@ -744,33 +744,46 @@ function layoutRow(
   return { blocks: r.blocks, fs: r.fs, padX, padTop, capH: r.capH, w: r.w, h: padTop + r.capH + padBottom };
 }
 
+/**
+ * Draw one row of blocks at reveal fraction `reveal` (0..1). Every block is
+ * masked on its own, growing from its own centre, and the blocks are laid out
+ * with the fixed gap at every moment, so the gap never scales with them.
+ */
 function drawRow(
   ctx: CanvasRenderingContext2D,
   row: LabelRow | null,
   cx: number,
   top: number,
   gap: number,
-  windowHalf: number,
+  reveal: number,
   offsetX: number,
   colors: Colors,
   family: string,
 ) {
-  if (!row || windowHalf < 0.5) return;
+  if (!row || reveal <= 0.001) return;
+  const r = Math.min(1, reveal);
+  const rowW = row.blocks.reduce((a, b) => a + b.w * r, 0) + gap * (row.blocks.length - 1);
   ctx.save();
-  ctx.beginPath();
-  ctx.rect(cx - windowHalf, top, windowHalf * 2, row.h);
-  ctx.clip();
   ctx.font = labelFont(row.fs, family);
   setTracking(ctx, row.fs);
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
-  let x = cx - row.w / 2 + offsetX;
+  let x = cx - rowW / 2 + offsetX;
   for (const b of row.blocks) {
-    ctx.fillStyle = colors.labelBg;
-    ctx.fillRect(x, top, b.w, row.h);
-    ctx.fillStyle = colors.labelText;
-    ctx.fillText(b.text, x + row.padX, top + row.padTop + row.capH);
-    x += b.w + gap;
+    const vw = b.w * r;
+    if (vw >= 0.5) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x, top, vw, row.h);
+      ctx.clip();
+      const bx = x + vw / 2 - b.w / 2; // full block centred in its mask
+      ctx.fillStyle = colors.labelBg;
+      ctx.fillRect(bx, top, b.w, row.h);
+      ctx.fillStyle = colors.labelText;
+      ctx.fillText(b.text, bx + row.padX, top + row.padTop + row.capH);
+      ctx.restore();
+    }
+    x += vw + gap;
   }
   ctx.restore();
 }
@@ -860,12 +873,12 @@ export function render(
   let y = H / 2 - seamH / 2;
   if (seamStage) {
     const f = foldOut(pSeamTop);
-    drawRow(ctx, seamStage, cx, y, gap, (seamStage.w / 2) * (1 - f), -slide * f, p.colors, fam);
+    drawRow(ctx, seamStage, cx, y, gap, 1 - f, -slide * f, p.colors, fam);
     y += seamStage.h + gap;
   }
   if (seamDay) {
     const f = foldOut(pSeamBot);
-    drawRow(ctx, seamDay, cx, y, gap, (seamDay.w / 2) * (1 - f), slide * f, p.colors, fam);
+    drawRow(ctx, seamDay, cx, y, gap, 1 - f, slide * f, p.colors, fam);
   }
 
   const ac = scene.artist;
@@ -881,7 +894,7 @@ export function render(
     const top = Math.max(0, Math.min(H - gh, clamp01(p.labelY) * H));
     let yy = top;
     for (const r of groupRows) {
-      drawRow(ctx, r, cx, yy, gap, (r.w / 2) * pa, -0.12 * S * (1 - pa), p.colors, fam);
+      drawRow(ctx, r, cx, yy, gap, pa, -0.12 * S * (1 - pa), p.colors, fam);
       yy += r.h + gap;
     }
     if (pa > 0.5) artistRect = { x: cx - gw / 2, y: top, w: gw, h: gh };
