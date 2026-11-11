@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Artist Card</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%278%27 fill=%27%230A06FD%27/%3E%3Crect y=%278%27 width=%2716%27 height=%278%27 fill=%27%23FA7C01%27/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@800&family=Inter:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <input type="file" id="fileInput" accept="image/*" hidden />
+    <input type="file" id="fontInput" accept=".ttf,.otf,.woff,.woff2" hidden />
+
+    <div id="app">
+      <header class="page-header">
+        <a href="/" class="brand">
+          <span class="brand-mark">Artist Card</span>
+          <div class="brand-sub">Row<br />Reveal<br />Generator</div>
+        </a>
+      </header>
+
+      <div class="body">
+        <aside class="sidebar">
+          <section class="group">
+            <label class="group-title">Format</label>
+            <div class="seg4" id="formatSeg">
+              <button type="button" class="surface-btn active" data-format="4:5">4:5</button>
+              <button type="button" class="surface-btn" data-format="16:9">16:9</button>
+              <button type="button" class="surface-btn" data-format="9:16">9:16</button>
+              <button type="button" class="surface-btn" data-format="1:1">1:1</button>
+            </div>
+          </section>
+
+          <section class="group">
+            <label class="group-title">Rows</label>
+            <div class="seg2">
+              <label class="field"><span>Top</span><input type="number" id="rowsTop" value="4" min="1" max="24" step="1" /></label>
+              <label class="field"><span>Bottom</span><input type="number" id="rowsBottom" value="4" min="1" max="24" step="1" /></label>
+            </div>
+            <label class="group-title">Focus: 2x blocks</label>
+            <div class="seg2" id="focusSeg">
+              <button type="button" class="surface-btn active" data-focus="top">Top half</button>
+              <button type="button" class="surface-btn" data-focus="bottom">Bottom half</button>
+            </div>
+          </section>
+
+          <section class="group">
+            <label class="group-title">Blocks</label>
+            <div class="sliders" id="blockSliders"></div>
+            <div class="seg2">
+              <label class="field"><span>Seed</span><input type="number" id="blockSeed" value="7" min="0" max="999999" step="1" /></label>
+              <button type="button" class="surface-btn" id="blockShuffle">Shuffle</button>
+            </div>
+          </section>
+
+          <section class="group">
+            <label class="group-title">Opening</label>
+            <div class="sliders" id="openSliders"></div>
+            <label class="group-title">Stagger order</label>
+            <div class="seg3" id="orderSeg">
+              <button type="button" class="surface-btn active" data-order="center">Centre out</button>
+              <button type="button" class="surface-btn" data-order="top">Top down</button>
+              <button type="button" class="surface-btn" data-order="bottom">Bottom up</button>
+            </div>
+            <label class="group-title">Easing</label>
+            <select id="easingSelect" class="surface-select"></select>
+            <div class="seg4 bezier">
+              <input type="number" id="bz0" step="0.01" min="0" max="1" />
+              <input type="number" id="bz1" step="0.01" min="-1" max="2" />
+              <input type="number" id="bz2" step="0.01" min="0" max="1" />
+              <input type="number" id="bz3" step="0.01" min="-1" max="2" />
+            </div>
+            <canvas id="easingPreview" class="easing-preview" width="300" height="80"></canvas>
+          </section>
+
+          <section class="group">
+            <label class="group-title">Opening shape</label>
+            <div class="sliders" id="shapeSliders"></div>
+            <div class="seg2">
+              <label class="field"><span>Seed</span><input type="number" id="shapeSeed" value="3" min="0" max="999999" step="1" /></label>
+              <button type="button" class="surface-btn" id="shapeShuffle">Shuffle</button>
+            </div>
+          </section>
+
+          <section class="group">
+            <label class="group-title">Timeline</label>
+            <div class="sliders" id="timeSliders"></div>
+            <div class="slider">
+              <div class="slider-head">
+                <span class="slider-label">Time</span>
+                <span class="slider-val" id="timeVal">0.00 s</span>
+              </div>
+              <div class="slider-row">
+                <input type="range" id="timeSlider" min="0" max="1" step="0.0005" value="0" />
+                <button type="button" class="reset-btn" id="timeResetBtn" title="Back to start">reset</button>
+              </div>
+            </div>
+            <button type="button" class="surface-btn play-btn" id="playBtn">Play</button>
+          </section>
+
+          <section class="group">
+            <label class="group-title">Text</label>
+            <label class="field"><span>Artist</span><input type="text" id="artistText" class="text-input" value="Kaytranada" /></label>
+            <label class="field"><span>Stage</span><input type="text" id="stageText" class="text-input" value="MAIN STAGE" /></label>
+            <label class="field"><span>Date</span><input type="text" id="dateText" class="text-input" value="Vendredi 28.08" /></label>
+            <label class="field"><span>Font family</span><input type="text" id="fontFamily" class="text-input" value="Manrope" /></label>
+            <button type="button" class="surface-btn" id="fontLoadBtn">Load font file</button>
+          </section>
+
+          <section class="group">
+            <label class="group-title">Colours</label>
+            <div class="color-rows" id="colorRows"></div>
+          </section>
+
+          <section class="group">
+            <label class="group-title">Background image</label>
+            <button type="button" class="surface-btn" id="imageLoadBtn">Load image</button>
+            <div class="sliders" id="imageSliders"></div>
+          </section>
+
+          <section class="group">
+            <label class="group-title">Settings</label>
+            <div class="seg2">
+              <button type="button" class="surface-btn" id="copySettingsBtn">Copy Settings</button>
+              <button type="button" class="surface-btn" id="pasteSettingsBtn">Paste Settings</button>
+            </div>
+          </section>
+
+          <section class="group">
+            <label class="group-title">Export</label>
+            <div class="seg2" id="exportScaleSeg">
+              <button type="button" class="surface-btn active" data-scale="1">1x</button>
+              <button type="button" class="surface-btn" data-scale="2">2x</button>
+            </div>
+            <div class="seg2" id="exportFpsSeg">
+              <button type="button" class="surface-btn active" data-fps="30">30 fps</button>
+              <button type="button" class="surface-btn" data-fps="60">60 fps</button>
+            </div>
+            <div class="seg2">
+              <button type="button" class="surface-btn" id="exportMp4Btn">MP4</button>
+              <button type="button" class="surface-btn" id="exportPngBtn">PNG</button>
+            </div>
+          </section>
+        </aside>
+
+        <main class="canvas-area">
+          <h2 class="canvas-title">Canvas Preview</h2>
+          <div class="stage" id="stage">
+            <canvas id="canvas" width="1080" height="1350"></canvas>
+            <div class="stage-overlay" id="dropZone">
+              <div class="stage-overlay-msg">Drop a background image</div>
+            </div>
+          </div>
+          <footer class="canvas-footer">
+            <nav class="footer-links">
+              <a href="https://typografie.be" target="_blank" rel="noopener">typografie.be</a>
+              <a href="mailto:hello@typografie.be">hello@typografie.be</a>
+              <a href="https://www.instagram.com/typograaf" target="_blank" rel="noopener">@typograaf</a>
+            </nav>
+            <a href="https://typograaf.be" target="_blank" rel="noopener" class="typograaf">
+              <img src="/icons/typograaf.svg" alt="typograaf" />
+            </a>
+          </footer>
+        </main>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
