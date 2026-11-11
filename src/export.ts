@@ -11,8 +11,28 @@ export function downloadBlob(blob: Blob, filename: string) {
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-function fileStem(p: Params, scale: number) {
-  return `artist-card-${p.format.replace(":", "x")}@${scale}x`;
+function slug(s: string): string {
+  return s
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export function fileStem(p: Params, scale: number): string {
+  const parts = [slug(p.artist), slug(p.date)].filter(Boolean);
+  const name = parts.length ? parts.join("-") : "artist-card";
+  return `${name}-${p.format.replace(":", "x")}@${scale}x`;
+}
+
+async function fontsReady(p: Params) {
+  try {
+    await document.fonts.load(`800 100px "${p.fontFamily}"`);
+    await document.fonts.ready;
+  } catch {
+    /* render with whatever is available */
+  }
 }
 
 export async function exportPng(
@@ -22,6 +42,7 @@ export async function exportPng(
   scale: number,
   image: ImageSource | null,
 ) {
+  await fontsReady(p);
   const c = document.createElement("canvas");
   c.width = scene.W * scale;
   c.height = scene.H * scale;
@@ -29,7 +50,7 @@ export async function exportPng(
   if (!ctx) return;
   render(ctx, p, scene, t, scale, image);
   const blob = await new Promise<Blob | null>((res) => c.toBlob(res, "image/png"));
-  if (blob) downloadBlob(blob, `${fileStem(p, scale)}.png`);
+  if (blob) downloadBlob(blob, `${fileStem(p, scale)}-${t.toFixed(2)}s.png`);
 }
 
 function pickH264Codec(w: number, h: number): string {
@@ -55,6 +76,7 @@ export async function exportMp4(
   image: ImageSource | null,
   onProgress: (fraction: number) => void,
 ) {
+  await fontsReady(p);
   const outW = Math.max(16, Math.floor((scene.W * scale) / 2) * 2);
   const outH = Math.max(16, Math.floor((scene.H * scale) / 2) * 2);
   const c = document.createElement("canvas");
@@ -76,33 +98,41 @@ export async function exportMp4(
       encoderError = e;
     },
   });
-  encoder.configure({
-    codec: pickH264Codec(outW, outH),
-    width: outW,
-    height: outH,
-    framerate: fps,
-    bitrate: Math.min(100_000_000, Math.round(outW * outH * fps * 0.25)),
-    bitrateMode: "variable",
-    avc: { format: "avc" },
-  });
-
-  for (let i = 0; i < totalFrames; i++) {
-    if (encoderError) throw encoderError;
-    render(ctx, p, scene, i / fps, scale, image);
-    const frame = new VideoFrame(c, {
-      timestamp: Math.round((i * 1_000_000) / fps),
-      duration: Math.round(1_000_000 / fps),
+  try {
+    encoder.configure({
+      codec: pickH264Codec(outW, outH),
+      width: outW,
+      height: outH,
+      framerate: fps,
+      bitrate: Math.min(100_000_000, Math.round(outW * outH * fps * 0.25)),
+      bitrateMode: "variable",
+      avc: { format: "avc" },
     });
-    encoder.encode(frame, { keyFrame: i % (fps * 2) === 0 });
-    frame.close();
-    while (encoder.encodeQueueSize > 16) await sleep(8);
-    if (i % 5 === 0) {
-      onProgress(i / totalFrames);
-      await sleep(0);
+
+    for (let i = 0; i < totalFrames; i++) {
+      if (encoderError) throw encoderError;
+      render(ctx, p, scene, i / fps, scale, image);
+      const frame = new VideoFrame(c, {
+        timestamp: Math.round((i * 1_000_000) / fps),
+        duration: Math.round(1_000_000 / fps),
+      });
+      encoder.encode(frame, { keyFrame: i % (fps * 2) === 0 });
+      frame.close();
+      while (encoder.encodeQueueSize > 16) await sleep(8);
+      if (i % 5 === 0) {
+        onProgress(i / totalFrames);
+        await sleep(0);
+      }
+    }
+    await encoder.flush();
+    muxer.finalize();
+    const buffer = muxer.target.buffer;
+    downloadBlob(new Blob([buffer], { type: "video/mp4" }), `${fileStem(p, scale)}.mp4`);
+  } finally {
+    try {
+      if (encoder.state !== "closed") encoder.close();
+    } catch {
+      /* already closed */
     }
   }
-  await encoder.flush();
-  muxer.finalize();
-  const buffer = muxer.target.buffer;
-  downloadBlob(new Blob([buffer], { type: "video/mp4" }), `${fileStem(p, scale)}.mp4`);
 }

@@ -7,6 +7,7 @@ import {
   FORMATS,
   bezierEase,
   buildScene,
+  coverRect,
   render,
   type Bezier,
   type Colors,
@@ -30,6 +31,12 @@ const fontInput = $<HTMLInputElement>("fontInput");
 const timeSlider = $<HTMLInputElement>("timeSlider");
 const timeVal = $<HTMLSpanElement>("timeVal");
 const playBtn = $<HTMLButtonElement>("playBtn");
+const canvasTitle = $<HTMLHeadingElement>("canvasTitle");
+const sidebar = $<HTMLElement>("sidebar");
+const exportPngBtn = $<HTMLButtonElement>("exportPngBtn");
+const exportMp4Btn = $<HTMLButtonElement>("exportMp4Btn");
+
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 const params: Params = structuredClone(DEFAULT_PARAMS);
 let scene: Scene = buildScene(params);
@@ -59,8 +66,11 @@ function rebuild() {
   schedule();
 }
 function syncTime() {
-  timeSlider.value = String(scene.tl.total > 0 ? time / scene.tl.total : 0);
-  timeVal.textContent = `${time.toFixed(2)} s / ${scene.tl.total.toFixed(2)} s`;
+  const total = scene.tl.total;
+  timeSlider.value = String(total > 0 ? time / total : 0);
+  const frame = Math.round(time * exportFps);
+  timeVal.textContent = `f ${frame} · ${time.toFixed(2)} / ${total.toFixed(2)} s`;
+  exportPngBtn.textContent = `PNG @ ${time.toFixed(2)} s`;
 }
 
 // ---------- playback ----------
@@ -76,6 +86,7 @@ function tick(now: number) {
   requestAnimationFrame(tick);
 }
 function setPlaying(p: boolean) {
+  if (p === playing) return;
   playing = p;
   playBtn.textContent = playing ? "Pause" : "Play";
   playBtn.classList.toggle("playing", playing);
@@ -87,21 +98,17 @@ function setPlaying(p: boolean) {
     schedule();
   }
 }
+function setTime(t: number) {
+  if (playing) setPlaying(false);
+  time = clamp(t, 0, scene.tl.total);
+  syncTime();
+  schedule();
+}
 playBtn.addEventListener("click", () => setPlaying(!playing));
-timeSlider.addEventListener("input", () => {
-  if (playing) setPlaying(false);
-  time = parseFloat(timeSlider.value) * scene.tl.total;
-  syncTime();
-  schedule();
-});
-$<HTMLButtonElement>("timeResetBtn").addEventListener("click", () => {
-  if (playing) setPlaying(false);
-  time = 0;
-  syncTime();
-  schedule();
-});
+timeSlider.addEventListener("input", () => setTime(parseFloat(timeSlider.value) * scene.tl.total));
+$<HTMLButtonElement>("timeResetBtn").addEventListener("click", () => setTime(0));
+
 document.addEventListener("keydown", (e) => {
-  if (e.code !== "Space" && e.key !== " ") return;
   const t = e.target as HTMLElement | null;
   const tag = t?.tagName ?? "";
   const type = (t as HTMLInputElement | null)?.type;
@@ -111,8 +118,22 @@ document.addEventListener("keydown", (e) => {
     tag === "SELECT" ||
     (tag === "INPUT" && type !== "range" && type !== "checkbox" && type !== "button");
   if (typing) return;
-  e.preventDefault();
-  setPlaying(!playing);
+  if (e.code === "Space" || e.key === " ") {
+    if (e.repeat || tag === "BUTTON") return; // let focused buttons activate
+    e.preventDefault();
+    setPlaying(!playing);
+    return;
+  }
+  if (tag === "INPUT" && type === "range") return; // native slider keys
+  if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+    e.preventDefault();
+    const dir = e.key === "ArrowLeft" ? -1 : 1;
+    const frames = e.shiftKey ? 10 : 1;
+    setTime(time + (dir * frames) / exportFps);
+  } else if (e.key === "Home") {
+    e.preventDefault();
+    setTime(0);
+  }
 });
 
 // ---------- generic segmented buttons ----------
@@ -137,6 +158,11 @@ function bindSeg<T extends string>(
   return setActive;
 }
 
+function updateCanvasTitle() {
+  const [W, H] = FORMATS[params.format];
+  const tail = exportScale > 1 ? ` · ${W * exportScale} x ${H * exportScale} at ${exportScale}x` : "";
+  canvasTitle.textContent = `Canvas Preview · ${W} x ${H}${tail}`;
+}
 const setFormatUI = bindSeg<Format>("formatSeg", "format", (v) => {
   params.format = v;
   applyFormat();
@@ -146,6 +172,7 @@ function applyFormat() {
   const [W, H] = FORMATS[params.format];
   canvas.width = W;
   canvas.height = H;
+  updateCanvasTitle();
 }
 const setFocusUI = bindSeg<Focus>("focusSeg", "focus", (v) => {
   params.focus = v;
@@ -157,27 +184,46 @@ const setOrderUI = bindSeg<StaggerOrder>("orderSeg", "order", (v) => {
 });
 bindSeg<string>("exportScaleSeg", "scale", (v) => {
   exportScale = parseInt(v, 10) || 1;
+  updateCanvasTitle();
 });
 bindSeg<string>("exportFpsSeg", "fps", (v) => {
   exportFps = parseInt(v, 10) || 30;
+  syncTime();
 });
 
 // ---------- number fields ----------
+
+/** Arrow = +-step, Shift+Arrow = +-10 steps, Enter commits (design-system convention). */
+function wireNumberKeys(el: HTMLInputElement, commit: () => void) {
+  el.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      commit();
+      return;
+    }
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    e.preventDefault();
+    const step = parseFloat(el.step || "1") * (e.shiftKey ? 10 : 1);
+    const min = el.min === "" ? -Infinity : parseFloat(el.min);
+    const max = el.max === "" ? Infinity : parseFloat(el.max);
+    const cur = parseFloat(el.value) || 0;
+    const next = clamp(cur + (e.key === "ArrowUp" ? step : -step), min, max);
+    el.value = String(Math.round(next * 1000) / 1000);
+    commit();
+  });
+}
 
 function bindInt(id: string, apply: (v: number) => void, min: number, max: number) {
   const el = $<HTMLInputElement>(id);
   const commit = () => {
     let v = Math.round(parseFloat(el.value));
     if (!isFinite(v)) v = min;
-    v = Math.max(min, Math.min(max, v));
+    v = clamp(v, min, max);
     el.value = String(v);
     apply(v);
     rebuild();
   };
   el.addEventListener("change", commit);
-  el.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") commit();
-  });
+  wireNumberKeys(el, commit);
   return el;
 }
 const rowsTopEl = bindInt("rowsTop", (v) => (params.rowsTop = v), 1, 24);
@@ -218,16 +264,17 @@ interface SliderDef {
   step: number;
   format: (v: number) => string;
   container: string;
+  title?: string;
 }
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 const secs = (v: number) => `${v.toFixed(2)} s`;
 const sliderDefs: SliderDef[] = [
-  { key: "unit", label: "Block unit", min: 12, max: 160, step: 1, format: (v) => `${v.toFixed(0)}px`, container: "blockSliders" },
-  { key: "movement", label: "Independent movement", min: 0, max: 1, step: 0.01, format: pct, container: "blockSliders" },
+  { key: "unit", label: "Block unit", min: 12, max: 160, step: 1, format: (v) => `${v.toFixed(0)}px`, container: "blockSliders", title: "Width of one block unit at 1x; rows use 1, 2 or 3 units" },
+  { key: "movement", label: "Extra block moves", min: 0, max: 1, step: 0.01, format: pct, container: "blockSliders", title: "Width changes that happen on their own during the holds, without any opening" },
   { key: "duration", label: "Duration", min: 0.1, max: 4, step: 0.05, format: secs, container: "openSliders" },
   { key: "stagger", label: "Stagger per row", min: 0, max: 1, step: 0.01, format: secs, container: "openSliders" },
-  { key: "holeSize", label: "Hole size", min: 0, max: 1, step: 0.01, format: pct, container: "shapeSliders" },
-  { key: "holeVariation", label: "Variation", min: 0, max: 1, step: 0.01, format: pct, container: "shapeSliders" },
+  { key: "holeSize", label: "Hole width", min: 0, max: 1, step: 0.01, format: pct, container: "shapeSliders", title: "How far the seam rows open, as a share of the width" },
+  { key: "holeVariation", label: "Hole irregularity", min: 0, max: 1, step: 0.01, format: pct, container: "shapeSliders", title: "Random extra steps per row and side; the hole never widens away from the seam" },
   { key: "holdClosed", label: "Hold closed", min: 0, max: 6, step: 0.05, format: secs, container: "timeSliders" },
   { key: "holdOpen", label: "Hold open", min: 0, max: 12, step: 0.05, format: secs, container: "timeSliders" },
   { key: "imageZoom", label: "Zoom", min: 1, max: 3, step: 0.01, format: pct, container: "imageSliders" },
@@ -238,9 +285,18 @@ const numParams = params as unknown as Record<NumKey, number>;
 const sliderInputs: Partial<Record<NumKey, HTMLInputElement>> = {};
 const sliderVals: Partial<Record<NumKey, HTMLSpanElement>> = {};
 
+function syncSlider(key: NumKey) {
+  const def = sliderDefs.find((d) => d.key === key);
+  const inp = sliderInputs[key];
+  const val = sliderVals[key];
+  if (def && inp) inp.value = String(numParams[key]);
+  if (def && val) val.textContent = def.format(numParams[key]);
+}
+
 function renderSlider(def: SliderDef) {
   const wrap = document.createElement("div");
   wrap.className = "slider";
+  if (def.title) wrap.title = def.title;
   wrap.innerHTML = `
     <div class="slider-head">
       <span class="slider-label">${def.label}</span>
@@ -286,6 +342,7 @@ for (const name of Object.keys(EASING_PRESETS)) {
 const customOpt = document.createElement("option");
 customOpt.value = "Custom";
 customOpt.textContent = "Custom";
+customOpt.disabled = true;
 easingSelect.appendChild(customOpt);
 
 function presetNameFor(b: Bezier): string {
@@ -305,20 +362,42 @@ function drawEasingPreview() {
   c.height = Math.round(h * dpr);
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   const style = getComputedStyle(document.documentElement);
-  g.fillStyle = style.getPropertyValue("--surface").trim() || "#2c0e23";
+  const surface = style.getPropertyValue("--surface").trim() || "#2c0e23";
+  const ink = style.getPropertyValue("--on-surface").trim() || "#dff0ff";
+  g.fillStyle = surface;
   g.fillRect(0, 0, w, h);
-  g.strokeStyle = style.getPropertyValue("--on-surface").trim() || "#dff0ff";
+  const pad = 8;
+  const px = (x: number) => pad + x * (w - 2 * pad);
+  const py = (y: number) => h - pad - y * (h - 2 * pad);
+  const [x1, y1, x2, y2] = params.easing;
+  // control handles
+  g.strokeStyle = ink;
+  g.globalAlpha = 0.45;
+  g.lineWidth = 1;
+  g.beginPath();
+  g.moveTo(px(0), py(0));
+  g.lineTo(px(x1), py(y1));
+  g.moveTo(px(1), py(1));
+  g.lineTo(px(x2), py(y2));
+  g.stroke();
+  for (const [hx, hy] of [
+    [x1, y1],
+    [x2, y2],
+  ]) {
+    g.beginPath();
+    g.arc(px(hx), py(hy), 3, 0, Math.PI * 2);
+    g.fillStyle = ink;
+    g.fill();
+  }
+  g.globalAlpha = 1;
   g.lineWidth = 1.5;
   g.beginPath();
   const ease = bezierEase(params.easing);
-  const pad = 8;
   for (let i = 0; i <= 100; i++) {
     const x = i / 100;
     const y = ease(x);
-    const px = pad + x * (w - 2 * pad);
-    const py = h - pad - y * (h - 2 * pad);
-    if (i === 0) g.moveTo(px, py);
-    else g.lineTo(px, py);
+    if (i === 0) g.moveTo(px(x), py(y));
+    else g.lineTo(px(x), py(y));
   }
   g.stroke();
 }
@@ -338,9 +417,12 @@ easingSelect.addEventListener("change", () => {
 bzInputs.forEach((el, i) => {
   const commit = () => {
     const v = parseFloat(el.value);
-    if (!isFinite(v)) return;
+    if (!isFinite(v)) {
+      el.value = String(params.easing[i]);
+      return;
+    }
     const next = [...params.easing] as Bezier;
-    next[i] = i % 2 === 0 ? Math.max(0, Math.min(1, v)) : Math.max(-1, Math.min(2, v));
+    next[i] = clamp(v, 0, 1);
     params.easing = next;
     el.value = String(next[i]);
     easingSelect.value = presetNameFor(next);
@@ -348,9 +430,7 @@ bzInputs.forEach((el, i) => {
     rebuild();
   };
   el.addEventListener("change", commit);
-  el.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") commit();
-  });
+  wireNumberKeys(el, commit);
 });
 
 // ---------- text + font ----------
@@ -367,54 +447,79 @@ const artistEl = bindText("artistText", (v) => (params.artist = v));
 const stageTextEl = bindText("stageText", (v) => (params.stage = v));
 const dateEl = bindText("dateText", (v) => (params.date = v));
 const fontFamilyEl = $<HTMLInputElement>("fontFamily");
+const fontStatusEl = $<HTMLSpanElement>("fontStatus");
+const fileFonts = new Set<string>();
+const requestedFonts = new Map<string, Promise<void>>();
 
-function ensureGoogleFont(family: string) {
+/** Google Fonts stylesheet for a family: try weight 800, fall back to the bare family. */
+function ensureGoogleFont(family: string): Promise<void> {
   const f = family.trim();
-  if (!f || f === "CustomLabelFont") return;
-  const id = "gf-" + f.replace(/\s+/g, "-").toLowerCase();
-  if (document.getElementById(id)) return;
-  const link = document.createElement("link");
-  link.id = id;
-  link.rel = "stylesheet";
-  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(f).replace(/%20/g, "+")}:wght@800&display=swap`;
-  document.head.appendChild(link);
+  if (!f || fileFonts.has(f)) return Promise.resolve();
+  const existing = requestedFonts.get(f);
+  if (existing) return existing;
+  const base = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(f).replace(/%20/g, "+")}`;
+  const p = new Promise<void>((resolve) => {
+    const add = (href: string, onFail: () => void) => {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = href;
+      link.onload = () => resolve();
+      link.onerror = () => {
+        link.remove();
+        onFail();
+      };
+      document.head.appendChild(link);
+    };
+    add(`${base}:wght@800&display=swap`, () => add(`${base}&display=swap`, () => resolve()));
+  });
+  requestedFonts.set(f, p);
+  return p;
+}
+function fontLoaded(family: string): boolean {
+  for (const face of document.fonts) {
+    if (face.family.replace(/["']/g, "") === family && face.status === "loaded") return true;
+  }
+  return false;
 }
 async function waitForFont(family: string) {
+  await ensureGoogleFont(family);
   try {
     await document.fonts.load(`800 100px "${family}"`);
   } catch {
     /* fall back silently */
   }
+  fontStatusEl.textContent = fontLoaded(family) ? "loaded" : "not found, using fallback";
   schedule();
 }
 let fontTimer = 0;
 fontFamilyEl.addEventListener("input", () => {
   params.fontFamily = fontFamilyEl.value.trim() || "Manrope";
+  fontStatusEl.textContent = "loading";
   schedule();
   window.clearTimeout(fontTimer);
-  fontTimer = window.setTimeout(() => {
-    ensureGoogleFont(params.fontFamily);
-    waitForFont(params.fontFamily);
-    window.setTimeout(() => waitForFont(params.fontFamily), 1500);
-  }, 400);
+  fontTimer = window.setTimeout(() => waitForFont(params.fontFamily), 400);
 });
 $<HTMLButtonElement>("fontLoadBtn").addEventListener("click", () => fontInput.click());
 fontInput.addEventListener("change", async () => {
   const file = fontInput.files?.[0];
   fontInput.value = "";
   if (!file) return;
+  const family = file.name.replace(/\.[^.]+$/, "");
   try {
-    const face = new FontFace("CustomLabelFont", await file.arrayBuffer(), { weight: "800" });
+    const face = new FontFace(family, await file.arrayBuffer(), { weight: "800" });
     await face.load();
     document.fonts.add(face);
-    params.fontFamily = "CustomLabelFont";
-    fontFamilyEl.value = file.name.replace(/\.[^.]+$/, "");
+    fileFonts.add(family);
+    params.fontFamily = family;
+    fontFamilyEl.value = family;
+    fontStatusEl.textContent = "loaded from file";
     schedule();
   } catch (err) {
     console.error("[font]", err);
     alert("Could not load that font file.");
   }
 });
+document.fonts.addEventListener("loadingdone", () => schedule());
 
 // ---------- colours ----------
 
@@ -508,23 +613,35 @@ buildColorRows();
 
 // ---------- background image ----------
 
+const imageRemoveBtn = $<HTMLButtonElement>("imageRemoveBtn");
+let loadGen = 0;
+function setImage(next: ImageSource | null) {
+  image = next;
+  canvas.classList.toggle("has-image", !!next);
+  imageRemoveBtn.disabled = !next;
+  schedule();
+}
 function loadImageFile(file: File) {
   if (!file.type.startsWith("image/")) return;
+  const gen = ++loadGen;
   const url = URL.createObjectURL(file);
   const img = new Image();
   img.onload = () => {
-    image = { source: img, width: img.naturalWidth, height: img.naturalHeight };
-    canvas.classList.add("has-image");
-    schedule();
+    URL.revokeObjectURL(url);
+    if (gen !== loadGen) return; // a newer file won
+    setImage({ source: img, width: img.naturalWidth, height: img.naturalHeight });
   };
   img.onerror = () => {
     URL.revokeObjectURL(url);
-    alert("Could not load that image.");
+    if (gen === loadGen) alert("Could not load that image.");
   };
   img.src = url;
 }
 $<HTMLButtonElement>("imageLoadBtn").addEventListener("click", () => fileInput.click());
-dropZone.addEventListener("click", () => fileInput.click());
+imageRemoveBtn.addEventListener("click", () => {
+  loadGen++;
+  setImage(null);
+});
 fileInput.addEventListener("change", () => {
   const f = fileInput.files?.[0];
   fileInput.value = "";
@@ -549,13 +666,62 @@ stageEl.addEventListener("drop", (e) => {
   if (f) loadImageFile(f);
 });
 
+// Drag on the preview to reposition the photo; a plain click (no drag) still
+// opens the file picker to replace it.
+let panning = false;
+let panMoved = false;
+let panX = 0;
+let panY = 0;
+stageEl.addEventListener("pointerdown", (e) => {
+  if (!image || e.button !== 0) return;
+  panning = true;
+  panMoved = false;
+  panX = e.clientX;
+  panY = e.clientY;
+  stageEl.setPointerCapture(e.pointerId);
+});
+stageEl.addEventListener("pointermove", (e) => {
+  if (!panning || !image) return;
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width === 0) return;
+  const k = canvas.width / rect.width; // canvas px per css px
+  const dx = (e.clientX - panX) * k;
+  const dy = (e.clientY - panY) * k;
+  if (!panMoved && Math.hypot(e.clientX - panX, e.clientY - panY) < 3) return;
+  panMoved = true;
+  stageEl.classList.add("panning");
+  panX = e.clientX;
+  panY = e.clientY;
+  const W = canvas.width;
+  const H = canvas.height;
+  const c = coverRect(image, W, H, params.imageZoom, 0, 0);
+  if (c.dw - W > 1) params.imageX = clamp(params.imageX - dx / ((c.dw - W) / 2), -1, 1);
+  if (c.dh - H > 1) params.imageY = clamp(params.imageY - dy / ((c.dh - H) / 2), -1, 1);
+  syncSlider("imageX");
+  syncSlider("imageY");
+  schedule();
+});
+for (const ev of ["pointerup", "pointercancel"]) {
+  stageEl.addEventListener(ev, () => {
+    panning = false;
+    stageEl.classList.remove("panning");
+  });
+}
+dropZone.addEventListener("click", () => {
+  if (panMoved) {
+    panMoved = false;
+    return;
+  }
+  fileInput.click();
+});
+
 // Scroll on the preview to zoom the canvas within the stage (CSS, not transform).
 let previewScale = 1;
 stageEl.addEventListener(
   "wheel",
   (e) => {
     e.preventDefault();
-    const next = Math.max(0.1, Math.min(1, previewScale - e.deltaY * 0.002));
+    const next = clamp(previewScale - e.deltaY * 0.002, 0.1, 1);
     if (next === previewScale) return;
     previewScale = next;
     canvas.style.setProperty("--preview-scale", String(previewScale));
@@ -570,6 +736,12 @@ function flash(btn: HTMLButtonElement, msg: string, ms = 900) {
   btn.textContent = msg;
   setTimeout(() => (btn.textContent = orig), ms);
 }
+const intRanges: Record<"rowsTop" | "rowsBottom" | "blockSeed" | "shapeSeed", [number, number]> = {
+  rowsTop: [1, 24],
+  rowsBottom: [1, 24],
+  blockSeed: [0, 999999],
+  shapeSeed: [0, 999999],
+};
 function applySettings(str: string): boolean {
   let obj: Partial<Record<keyof Params, unknown>>;
   try {
@@ -577,40 +749,62 @@ function applySettings(str: string): boolean {
   } catch {
     return false;
   }
-  if (!obj || typeof obj !== "object") return false;
-  const numKeys: (NumKey | "rowsTop" | "rowsBottom" | "blockSeed" | "shapeSeed")[] = [
-    ...sliderDefs.map((d) => d.key),
-    "rowsTop",
-    "rowsBottom",
-    "blockSeed",
-    "shapeSeed",
-  ];
-  const all = params as unknown as Record<string, unknown>;
-  for (const k of numKeys) {
-    const v = obj[k];
-    if (typeof v === "number" && isFinite(v)) all[k] = v;
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return false;
+  let applied = 0;
+  for (const def of sliderDefs) {
+    const v = obj[def.key];
+    if (typeof v === "number" && Number.isFinite(v)) {
+      numParams[def.key] = clamp(v, def.min, def.max);
+      applied++;
+    }
   }
-  if (obj.format && (obj.format as string) in FORMATS) params.format = obj.format as Format;
-  if (obj.focus === "top" || obj.focus === "bottom") params.focus = obj.focus;
-  if (obj.staggerOrder === "center" || obj.staggerOrder === "top" || obj.staggerOrder === "bottom")
+  for (const k of Object.keys(intRanges) as (keyof typeof intRanges)[]) {
+    const v = obj[k];
+    if (typeof v === "number" && Number.isFinite(v)) {
+      params[k] = clamp(Math.round(v), intRanges[k][0], intRanges[k][1]);
+      applied++;
+    }
+  }
+  if (typeof obj.format === "string" && Object.hasOwn(FORMATS, obj.format)) {
+    params.format = obj.format as Format;
+    applied++;
+  }
+  if (obj.focus === "top" || obj.focus === "bottom") {
+    params.focus = obj.focus;
+    applied++;
+  }
+  if (obj.staggerOrder === "center" || obj.staggerOrder === "top" || obj.staggerOrder === "bottom") {
     params.staggerOrder = obj.staggerOrder;
-  if (Array.isArray(obj.easing) && obj.easing.length === 4 && obj.easing.every((x) => typeof x === "number"))
-    params.easing = [...(obj.easing as number[])] as Bezier;
+    applied++;
+  }
+  if (
+    Array.isArray(obj.easing) &&
+    obj.easing.length === 4 &&
+    obj.easing.every((x) => typeof x === "number" && Number.isFinite(x))
+  ) {
+    params.easing = (obj.easing as number[]).map((x) => clamp(x, 0, 1)) as Bezier;
+    applied++;
+  }
   for (const k of ["artist", "stage", "date", "fontFamily"] as const) {
-    if (typeof obj[k] === "string") params[k] = obj[k] as string;
+    if (typeof obj[k] === "string") {
+      params[k] = (obj[k] as string).slice(0, 200);
+      applied++;
+    }
   }
   if (obj.colors && typeof obj.colors === "object") {
     const c = obj.colors as Record<string, unknown>;
     for (const k of Object.keys(colorLabels) as (keyof Colors)[]) {
       const n = typeof c[k] === "string" ? normalizeHex(c[k] as string) : null;
-      if (n) params.colors[k] = n;
+      if (n) {
+        params.colors[k] = n;
+        applied++;
+      }
     }
   }
-  params.rowsTop = Math.max(1, Math.min(24, Math.round(params.rowsTop)));
-  params.rowsBottom = Math.max(1, Math.min(24, Math.round(params.rowsBottom)));
+  if (!applied) return false;
+  if (!params.fontFamily) params.fontFamily = "Manrope";
   syncUI();
   applyFormat();
-  ensureGoogleFont(params.fontFamily);
   waitForFont(params.fontFamily);
   rebuild();
   return true;
@@ -645,12 +839,7 @@ function syncUI() {
   rowsBottomEl.value = String(params.rowsBottom);
   blockSeedEl.value = String(params.blockSeed);
   shapeSeedEl.value = String(params.shapeSeed);
-  for (const def of sliderDefs) {
-    const inp = sliderInputs[def.key];
-    const val = sliderVals[def.key];
-    if (inp) inp.value = String(numParams[def.key]);
-    if (val) val.textContent = def.format(numParams[def.key]);
-  }
+  for (const def of sliderDefs) syncSlider(def.key);
   syncEasingUI();
   artistEl.value = params.artist;
   stageTextEl.value = params.stage;
@@ -667,12 +856,18 @@ function syncUI() {
 
 // ---------- export ----------
 
-const exportPngBtn = $<HTMLButtonElement>("exportPngBtn");
-const exportMp4Btn = $<HTMLButtonElement>("exportMp4Btn");
+function snapshot() {
+  const p = structuredClone(params);
+  return { p, scene: buildScene(p), image };
+}
 exportPngBtn.addEventListener("click", async () => {
+  const snap = snapshot();
   exportPngBtn.disabled = true;
   try {
-    await exportPng(params, scene, time, exportScale, image);
+    await exportPng(snap.p, snap.scene, time, exportScale, snap.image);
+  } catch (err) {
+    console.error("[export]", err);
+    alert("PNG export failed; check the console.");
   } finally {
     exportPngBtn.disabled = false;
   }
@@ -683,11 +878,13 @@ exportMp4Btn.addEventListener("click", async () => {
     return;
   }
   const wasPlaying = playing;
-  if (playing) setPlaying(false);
+  setPlaying(false);
+  const snap = snapshot();
+  sidebar.inert = true;
   exportMp4Btn.disabled = true;
   exportPngBtn.disabled = true;
   try {
-    await exportMp4(params, scene, exportScale, exportFps, image, (f) => {
+    await exportMp4(snap.p, snap.scene, exportScale, exportFps, snap.image, (f) => {
       exportMp4Btn.textContent = `Encoding ${Math.round(f * 100)}%`;
     });
   } catch (err) {
@@ -697,7 +894,8 @@ exportMp4Btn.addEventListener("click", async () => {
     exportMp4Btn.textContent = "MP4";
     exportMp4Btn.disabled = false;
     exportPngBtn.disabled = false;
-    if (wasPlaying) setPlaying(true);
+    sidebar.inert = false;
+    if (wasPlaying && !playing) setPlaying(true);
     else schedule();
   }
 });
@@ -719,9 +917,7 @@ declare global {
 window.artistCard = {
   params,
   setTime: (t: number) => {
-    if (playing) setPlaying(false);
-    time = Math.max(0, Math.min(scene.tl.total, t));
-    syncTime();
+    setTime(t);
     draw();
   },
   apply: applySettings,
@@ -730,8 +926,8 @@ window.artistCard = {
       const img = new Image();
       img.crossOrigin = "anonymous";
       img.onload = () => {
-        image = { source: img, width: img.naturalWidth, height: img.naturalHeight };
-        canvas.classList.add("has-image");
+        loadGen++;
+        setImage({ source: img, width: img.naturalWidth, height: img.naturalHeight });
         draw();
         resolve();
       };

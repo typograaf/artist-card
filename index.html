@@ -25,66 +25,37 @@
       </header>
 
       <div class="body">
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar">
           <section class="group">
             <label class="group-title">Format</label>
             <div class="seg4" id="formatSeg">
-              <button type="button" class="surface-btn active" data-format="4:5">4:5</button>
-              <button type="button" class="surface-btn" data-format="16:9">16:9</button>
-              <button type="button" class="surface-btn" data-format="9:16">9:16</button>
-              <button type="button" class="surface-btn" data-format="1:1">1:1</button>
+              <button type="button" class="surface-btn active" data-format="4:5" title="1080 x 1350">4:5</button>
+              <button type="button" class="surface-btn" data-format="16:9" title="1920 x 1080">16:9</button>
+              <button type="button" class="surface-btn" data-format="9:16" title="1080 x 1920">9:16</button>
+              <button type="button" class="surface-btn" data-format="1:1" title="1080 x 1080">1:1</button>
             </div>
           </section>
 
           <section class="group">
-            <label class="group-title">Rows</label>
+            <label class="group-title">Background image</label>
             <div class="seg2">
-              <label class="field"><span>Top</span><input type="number" id="rowsTop" value="4" min="1" max="24" step="1" /></label>
-              <label class="field"><span>Bottom</span><input type="number" id="rowsBottom" value="4" min="1" max="24" step="1" /></label>
+              <button type="button" class="surface-btn" id="imageLoadBtn">Load image</button>
+              <button type="button" class="surface-btn" id="imageRemoveBtn" disabled>Remove</button>
             </div>
-            <label class="group-title">Focus: 2x blocks</label>
-            <div class="seg2" id="focusSeg">
-              <button type="button" class="surface-btn active" data-focus="top">Top half</button>
-              <button type="button" class="surface-btn" data-focus="bottom">Bottom half</button>
-            </div>
+            <div class="sliders" id="imageSliders"></div>
+            <div class="hint">Drag the preview to reposition the photo.</div>
           </section>
 
           <section class="group">
-            <label class="group-title">Blocks</label>
-            <div class="sliders" id="blockSliders"></div>
-            <div class="seg2">
-              <label class="field"><span>Seed</span><input type="number" id="blockSeed" value="7" min="0" max="999999" step="1" /></label>
-              <button type="button" class="surface-btn" id="blockShuffle">Shuffle</button>
-            </div>
-          </section>
-
-          <section class="group">
-            <label class="group-title">Opening</label>
-            <div class="sliders" id="openSliders"></div>
-            <label class="group-title">Stagger order</label>
-            <div class="seg3" id="orderSeg">
-              <button type="button" class="surface-btn active" data-order="center">Centre out</button>
-              <button type="button" class="surface-btn" data-order="top">Top down</button>
-              <button type="button" class="surface-btn" data-order="bottom">Bottom up</button>
-            </div>
-            <label class="group-title">Easing</label>
-            <select id="easingSelect" class="surface-select"></select>
-            <div class="seg4 bezier">
-              <input type="number" id="bz0" step="0.01" min="0" max="1" />
-              <input type="number" id="bz1" step="0.01" min="-1" max="2" />
-              <input type="number" id="bz2" step="0.01" min="0" max="1" />
-              <input type="number" id="bz3" step="0.01" min="-1" max="2" />
-            </div>
-            <canvas id="easingPreview" class="easing-preview" width="300" height="80"></canvas>
-          </section>
-
-          <section class="group">
-            <label class="group-title">Opening shape</label>
-            <div class="sliders" id="shapeSliders"></div>
-            <div class="seg2">
-              <label class="field"><span>Seed</span><input type="number" id="shapeSeed" value="3" min="0" max="999999" step="1" /></label>
-              <button type="button" class="surface-btn" id="shapeShuffle">Shuffle</button>
-            </div>
+            <label class="group-title">Text</label>
+            <label class="field"><span>Artist</span><input type="text" id="artistText" class="text-input" value="Kaytranada" /></label>
+            <label class="field"><span>Stage</span><input type="text" id="stageText" class="text-input" value="MAIN STAGE" /></label>
+            <label class="field"><span>Date</span><input type="text" id="dateText" class="text-input" value="Vendredi 28.08" /></label>
+            <label class="field">
+              <span class="field-head"><span>Label font (Google Fonts name)</span><span class="field-status" id="fontStatus"></span></span>
+              <input type="text" id="fontFamily" class="text-input" value="Manrope" />
+            </label>
+            <button type="button" class="surface-btn" id="fontLoadBtn">Load font file</button>
           </section>
 
           <section class="group">
@@ -100,27 +71,63 @@
                 <button type="button" class="reset-btn" id="timeResetBtn" title="Back to start">reset</button>
               </div>
             </div>
-            <button type="button" class="surface-btn play-btn" id="playBtn">Play</button>
+            <button type="button" class="surface-btn play-btn" id="playBtn" title="Space plays and pauses; arrow keys step one frame, Shift+arrow ten">Play</button>
           </section>
 
           <section class="group">
-            <label class="group-title">Text</label>
-            <label class="field"><span>Artist</span><input type="text" id="artistText" class="text-input" value="Kaytranada" /></label>
-            <label class="field"><span>Stage</span><input type="text" id="stageText" class="text-input" value="MAIN STAGE" /></label>
-            <label class="field"><span>Date</span><input type="text" id="dateText" class="text-input" value="Vendredi 28.08" /></label>
-            <label class="field"><span>Font family</span><input type="text" id="fontFamily" class="text-input" value="Manrope" /></label>
-            <button type="button" class="surface-btn" id="fontLoadBtn">Load font file</button>
+            <label class="group-title">Rows</label>
+            <div class="seg2">
+              <label class="field"><span>Top half</span><input type="number" id="rowsTop" value="4" min="1" max="24" step="1" /></label>
+              <label class="field"><span>Bottom half</span><input type="number" id="rowsBottom" value="4" min="1" max="24" step="1" /></label>
+            </div>
+            <span class="sub-title">Thick blocks (one unit thicker)</span>
+            <div class="seg2" id="focusSeg">
+              <button type="button" class="surface-btn active" data-focus="top">Top half</button>
+              <button type="button" class="surface-btn" data-focus="bottom">Bottom half</button>
+            </div>
+          </section>
+
+          <section class="group">
+            <label class="group-title">Blocks</label>
+            <div class="sliders" id="blockSliders"></div>
+            <div class="seg2">
+              <label class="field"><span>Block seed</span><input type="number" id="blockSeed" value="7" min="0" max="999999" step="1" title="Widths per row (1, 2 or 3 units), their changes and the stripe phases" /></label>
+              <button type="button" class="surface-btn" id="blockShuffle">Shuffle</button>
+            </div>
+          </section>
+
+          <section class="group">
+            <label class="group-title">Opening</label>
+            <div class="sliders" id="openSliders"></div>
+            <span class="sub-title">Stagger order (closing runs in reverse)</span>
+            <div class="seg3" id="orderSeg">
+              <button type="button" class="surface-btn active" data-order="center">Centre out</button>
+              <button type="button" class="surface-btn" data-order="top">Top down</button>
+              <button type="button" class="surface-btn" data-order="bottom">Bottom up</button>
+            </div>
+            <span class="sub-title">Easing (also drives the block moves)</span>
+            <select id="easingSelect" class="surface-select"></select>
+            <div class="seg4 bezier">
+              <label class="field"><span>x1</span><input type="number" id="bz0" step="0.01" min="0" max="1" /></label>
+              <label class="field"><span>y1</span><input type="number" id="bz1" step="0.01" min="0" max="1" /></label>
+              <label class="field"><span>x2</span><input type="number" id="bz2" step="0.01" min="0" max="1" /></label>
+              <label class="field"><span>y2</span><input type="number" id="bz3" step="0.01" min="0" max="1" /></label>
+            </div>
+            <canvas id="easingPreview" class="easing-preview" width="300" height="80"></canvas>
+          </section>
+
+          <section class="group">
+            <label class="group-title">Opening shape</label>
+            <div class="sliders" id="shapeSliders"></div>
+            <div class="seg2">
+              <label class="field"><span>Shape seed</span><input type="number" id="shapeSeed" value="3" min="0" max="999999" step="1" title="How far each row's two halves slide apart" /></label>
+              <button type="button" class="surface-btn" id="shapeShuffle">Shuffle</button>
+            </div>
           </section>
 
           <section class="group">
             <label class="group-title">Colours</label>
             <div class="color-rows" id="colorRows"></div>
-          </section>
-
-          <section class="group">
-            <label class="group-title">Background image</label>
-            <button type="button" class="surface-btn" id="imageLoadBtn">Load image</button>
-            <div class="sliders" id="imageSliders"></div>
           </section>
 
           <section class="group">
@@ -142,14 +149,14 @@
               <button type="button" class="surface-btn" data-fps="60">60 fps</button>
             </div>
             <div class="seg2">
-              <button type="button" class="surface-btn" id="exportMp4Btn">MP4</button>
-              <button type="button" class="surface-btn" id="exportPngBtn">PNG</button>
+              <button type="button" class="surface-btn" id="exportMp4Btn" title="One full loop as H.264 MP4">MP4</button>
+              <button type="button" class="surface-btn" id="exportPngBtn" title="The frame shown in the preview">PNG</button>
             </div>
           </section>
         </aside>
 
         <main class="canvas-area">
-          <h2 class="canvas-title">Canvas Preview</h2>
+          <h2 class="canvas-title" id="canvasTitle">Canvas Preview</h2>
           <div class="stage" id="stage">
             <canvas id="canvas" width="1080" height="1350"></canvas>
             <div class="stage-overlay" id="dropZone">

@@ -28,9 +28,9 @@ export interface Params {
   rowsTop: number;
   rowsBottom: number;
   unit: number; // block unit in px at 1x
-  focus: Focus; // this half gets 2x block width
+  focus: Focus; // this half gets one unit thicker blocks (2/3/4 vs 1/2/3)
   blockSeed: number;
-  movement: number; // 0..1 amount of independent block moves
+  movement: number; // 0..1 amount of extra block moves during the holds
   holeSize: number; // 0..1 of half the width
   holeVariation: number; // 0..1
   shapeSeed: number;
@@ -51,7 +51,7 @@ export interface Params {
 }
 
 export const EASING_PRESETS: Record<string, Bezier> = {
-  Reference: [0.7, 0.15, 0.05, 0.8],
+  Measured: [0.8, 0.1, 0.1, 0.8],
   "Ease in-out": [0.42, 0, 0.58, 1],
   Snap: [0.85, 0, 0.15, 1],
   "Ease out": [0, 0, 0.2, 1],
@@ -67,15 +67,15 @@ export const DEFAULT_PARAMS: Params = {
   focus: "top",
   blockSeed: 7,
   movement: 0.5,
-  holeSize: 0.9,
+  holeSize: 1,
   holeVariation: 0.3,
   shapeSeed: 3,
   duration: 1.5,
-  stagger: 0.13,
+  stagger: 0.15,
   staggerOrder: "center",
-  easing: [0.7, 0.15, 0.05, 0.8],
-  holdClosed: 1.5,
-  holdOpen: 5,
+  easing: [0.8, 0.1, 0.1, 0.8],
+  holdClosed: 1.8,
+  holdOpen: 4.3,
   colors: {
     topA: "#7E9EFC",
     topB: "#0A06FD",
@@ -165,7 +165,8 @@ export interface RowSpec {
   y0: number;
   y1: number;
   rank: number;
-  delay: number;
+  delay: number; // opening delay (s)
+  closeDelay: number; // closing delay (s), mirrored so outer rows close first
   phase: number; // 0..2 block widths
   m0: number; // multiplier in the closed (loop) state
   holeL: number; // px at 1x, fully open
@@ -182,20 +183,31 @@ export interface Timeline {
   span: number;
 }
 
+export interface LabelClock {
+  openAt: number;
+  openD: number;
+  closeAt: number;
+  closeD: number;
+}
+
 export interface Scene {
   W: number;
   H: number;
   rows: RowSpec[];
   tl: Timeline;
+  artist: LabelClock;
   ease: (x: number) => number;
 }
 
 const clampInt = (v: number, lo: number, hi: number) =>
   Math.max(lo, Math.min(hi, Math.round(v) || lo));
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
-function pickOther(current: number, r: number): number {
-  const options = [1, 2, 3].filter((m) => m !== current);
-  return options[Math.min(options.length - 1, Math.floor(r * options.length))];
+/** Next multiplier: one step up or down within 1..3 (never 1 <-> 3 in one move). */
+function pickStep(current: number, r: number): number {
+  if (current <= 1) return 2;
+  if (current >= 3) return 2;
+  return r < 0.5 ? 1 : 3;
 }
 
 export function buildScene(p: Params): Scene {
@@ -220,6 +232,7 @@ export function buildScene(p: Params): Scene {
       y1,
       rank,
       delay: 0,
+      closeDelay: 0,
       phase: 0,
       m0: 1,
       holeL: 0,
@@ -239,80 +252,124 @@ export function buildScene(p: Params): Scene {
   for (const r of rows) {
     const k = r.index;
     r.delay = p.stagger * r.rank;
-    r.phase = rand(p.blockSeed, k, 1) * 2;
-    r.m0 = 1 + Math.floor(rand(p.blockSeed, k, 2) * 3);
+    r.closeDelay = span - r.delay;
 
-    // Opening shape: a hill that peaks at the seam, plus seeded variation per side.
+    // Stripe phase: stratified so neighbouring rows don't form a staircase.
+    r.phase = ((((k * 0.618) % 1) + rand(p.blockSeed, k, 1) * 0.6) % 1) * 2;
+    // Closed-state width multiplier, nudged away from the row above.
+    r.m0 = 1 + Math.floor(rand(p.blockSeed, k, 2) * 3);
+    if (k > 0 && r.m0 === rows[k - 1].m0 && rand(p.blockSeed, k, 4) < 0.6) {
+      r.m0 = pickStep(r.m0, rand(p.blockSeed, k, 5));
+    }
+
+    // Opening shape: a stepped hill peaking at the seam, plus seeded +-steps.
     const yc = (r.y0 + r.y1) / 2;
     const env = 1 - 0.6 * (Math.abs(yc - H / 2) / (H / 2));
+    const base = Math.round(((W / 2) * p.holeSize * env) / q) * q;
     const sides: ("holeL" | "holeR")[] = ["holeL", "holeR"];
     sides.forEach((side, si) => {
       const noise = rand(p.shapeSeed, k, 10 + si) * 2 - 1;
-      const raw = (W / 2) * p.holeSize * env * (1 + p.holeVariation * noise);
-      const snapped = Math.round(raw / q) * q;
-      r[side] = Math.max(0, Math.min(W / 2, snapped));
+      const steps = Math.round(noise * p.holeVariation * 3);
+      r[side] = Math.max(0, Math.min(W / 2, base + steps * q));
     });
+  }
+  // The hole never widens again as it moves away from the seam.
+  for (let i = nTop - 2; i >= 0; i--) {
+    rows[i].holeL = Math.min(rows[i].holeL, rows[i + 1].holeL);
+    rows[i].holeR = Math.min(rows[i].holeR, rows[i + 1].holeR);
+  }
+  for (let i = nTop + 1; i < n; i++) {
+    rows[i].holeL = Math.min(rows[i].holeL, rows[i - 1].holeL);
+    rows[i].holeR = Math.min(rows[i].holeR, rows[i - 1].holeR);
+  }
 
-    // Block width transitions: optional pre-move in the closed hold, the opening
-    // move (same easing/stagger as the hole), independent moves during the open
-    // hold, and the closing move back to m0 so the loop is seamless.
+  // Block width transitions: optional move in the closed hold, the opening
+  // move (same easing/stagger as the hole), extra moves during the open hold
+  // (never overlapping), and the closing move back to m0 so the loop is seamless.
+  const d = p.duration;
+  for (const r of rows) {
+    const k = r.index;
     const moves: Move[] = [];
     let m = r.m0;
     const openAt = tOpen + r.delay;
-    const closeAt = tClose + r.delay;
-    if (p.holdClosed > p.duration * 1.6 && rand(p.blockSeed, k, 20) < p.movement) {
-      const latest = openAt - p.duration * 1.1;
-      const t = 0.2 + rand(p.blockSeed, k, 21) * Math.max(0, latest - 0.2);
-      const to = pickOther(m, rand(p.blockSeed, k, 22));
-      moves.push({ t, d: p.duration, from: m, to });
+    const closeAt = tClose + r.closeDelay;
+    const latest = openAt - d; // a pre-move must end before the opening move
+    if (latest >= 0.1 && rand(p.blockSeed, k, 20) < p.movement) {
+      const t = 0.1 + rand(p.blockSeed, k, 21) * (latest - 0.1);
+      const to = pickStep(m, rand(p.blockSeed, k, 22));
+      moves.push({ t, d, from: m, to });
       m = to;
     }
-    const m1 = pickOther(m, rand(p.blockSeed, k, 3));
-    moves.push({ t: openAt, d: p.duration, from: m, to: m1 });
+    const m1 = pickStep(m, rand(p.blockSeed, k, 3));
+    moves.push({ t: openAt, d, from: m, to: m1 });
     m = m1;
-    const a = openAt + p.duration;
-    const b = closeAt - p.duration;
-    const L = b - a;
-    const nMax = Math.floor(L / p.duration);
-    let nIdle = Math.floor(rand(p.blockSeed, k, 30) * (p.movement * 4 + 0.999));
-    nIdle = Math.min(nIdle, Math.max(0, nMax - 1));
+    const a = openAt + d;
+    const b = closeAt - d;
+    const L = Math.max(0, b - a);
+    const nMax = Math.floor(L / d);
+    const nIdle = Math.min(nMax, Math.floor(p.movement * nMax + rand(p.blockSeed, k, 30)));
     if (nIdle > 0) {
-      const slot = (L - p.duration) / nIdle;
+      const slot = L / nIdle;
       for (let j = 0; j < nIdle; j++) {
-        const t = a + slot * (j + rand(p.blockSeed, k, 40 + j) * 0.8);
-        const to = pickOther(m, rand(p.blockSeed, k, 60 + j));
-        moves.push({ t, d: p.duration, from: m, to });
+        const t = a + slot * j + rand(p.blockSeed, k, 40 + j) * (slot - d);
+        const to = pickStep(m, rand(p.blockSeed, k, 60 + j));
+        moves.push({ t, d, from: m, to });
         m = to;
       }
     }
-    moves.push({ t: closeAt, d: p.duration, from: m, to: r.m0 });
+    moves.push({ t: closeAt, d, from: m, to: r.m0 });
     r.moves = moves;
   }
-  return { W, H, rows, tl, ease: bezierEase(p.easing) };
+
+  // The artist name has its own clock: it starts a beat after the bottom row
+  // and unfolds a little faster; on close it folds with that row.
+  const bottom = rows[n - 1];
+  const artist: LabelClock = {
+    openAt: tOpen + bottom.delay + 1.5 * p.stagger,
+    openD: 0.8 * d,
+    closeAt: tClose + bottom.closeDelay,
+    closeD: 0.75 * d,
+  };
+  return { W, H, rows, tl, artist, ease: bezierEase(p.easing) };
+}
+
+/**
+ * Eased 0..1 for a time fraction. Long-tailed curves spend their last frames
+ * on sub-pixel motion, so the ends snap; overshoot is clamped so hole, labels
+ * and block widths always share one curve.
+ */
+function eased(scene: Scene, u: number): number {
+  if (u <= 0.004) return 0;
+  if (u >= 0.996) return 1;
+  return clamp01(scene.ease(u));
+}
+
+function segmentProgress(scene: Scene, t: number, openAt: number, openD: number, closeAt: number, closeD: number): number {
+  if (t < openAt) return 0;
+  if (t < openAt + openD) return eased(scene, (t - openAt) / openD);
+  if (t < closeAt) return 1;
+  if (t < closeAt + closeD) return 1 - eased(scene, (t - closeAt) / closeD);
+  return 0;
 }
 
 /** Row opening progress 0..1 at time t (seconds into the loop). */
 export function rowProgress(scene: Scene, p: Params, r: RowSpec, t: number): number {
-  const a = scene.tl.tOpen + r.delay;
-  const c = scene.tl.tClose + r.delay;
-  let pr = 0;
-  if (t < a) pr = 0;
-  else if (t < a + p.duration) pr = scene.ease((t - a) / p.duration);
-  else if (t < c) pr = 1;
-  else if (t < c + p.duration) pr = 1 - scene.ease((t - c) / p.duration);
-  // Long-tailed easings spend their last frames on sub-pixel motion; snap so
-  // the loop ends truly closed (no hairline hole or label sliver at the seam).
-  if (pr < 0.004) return 0;
-  if (pr > 0.996) return 1;
-  return pr;
+  return segmentProgress(
+    scene,
+    t,
+    scene.tl.tOpen + r.delay,
+    p.duration,
+    scene.tl.tClose + r.closeDelay,
+    p.duration,
+  );
 }
 
-/** Block width multiplier (1..3, fractional while moving) at time t. */
+/** Block width multiplier (1..3 non-focus, fractional while moving) at time t. */
 export function rowMultiplier(scene: Scene, r: RowSpec, t: number): number {
   let m = r.m0;
   for (const mv of r.moves) {
     if (t < mv.t) break;
-    if (t < mv.t + mv.d) return mv.from + (mv.to - mv.from) * scene.ease((t - mv.t) / mv.d);
+    if (t < mv.t + mv.d) return mv.from + (mv.to - mv.from) * eased(scene, (t - mv.t) / mv.d);
     m = mv.to;
   }
   return m;
@@ -326,21 +383,21 @@ export interface ImageSource {
   height: number;
 }
 
-function drawCover(
-  ctx: CanvasRenderingContext2D,
-  img: ImageSource,
+/** Cover-fit placement of the background image (shared with drag-to-pan). */
+export function coverRect(
+  img: { width: number; height: number },
   W: number,
   H: number,
   zoom: number,
   ox: number,
   oy: number,
-) {
+): { x: number; y: number; dw: number; dh: number } {
   const s = Math.max(W / img.width, H / img.height) * Math.max(0.1, zoom);
   const dw = img.width * s;
   const dh = img.height * s;
   const x = (W - dw) / 2 - ox * ((dw - W) / 2);
   const y = (H - dh) / 2 - oy * ((dh - H) / 2);
-  ctx.drawImage(img.source, x, y, dw, dh);
+  return { x, y, dw, dh };
 }
 
 function drawStripes(
@@ -374,31 +431,44 @@ interface LabelMetrics {
   fs: number;
   bw: number;
   bh: number;
-  capH: number;
+  ascent: number; // ink ascent of the measured string
+  descent: number;
 }
 
 function labelFont(fs: number, family: string) {
   return `800 ${fs}px "${family}", "Manrope", system-ui, sans-serif`;
 }
 
+/**
+ * Box metrics measured on the reference: fixed padding in canvas units
+ * regardless of font size, text ink centred in the box.
+ */
 function measureLabel(
   ctx: CanvasRenderingContext2D,
   text: string,
   fs: number,
   family: string,
+  padX: number,
+  padY: number,
   maxW: number,
+  capsOnly: boolean,
 ): LabelMetrics {
-  ctx.font = labelFont(fs, family);
-  let tw = ctx.measureText(text).width;
-  let bw = tw + 2 * 0.2 * fs;
-  if (bw > maxW && tw > 0) {
-    fs = fs * (maxW / bw);
-    ctx.font = labelFont(fs, family);
-    tw = ctx.measureText(text).width;
-    bw = tw + 2 * 0.2 * fs;
+  const measure = (size: number) => {
+    ctx.font = labelFont(size, family);
+    const m = ctx.measureText(text);
+    const cap = ctx.measureText("H");
+    const ascent = capsOnly ? cap.actualBoundingBoxAscent || size * 0.7 : m.actualBoundingBoxAscent || size * 0.7;
+    const descent = capsOnly ? 0 : m.actualBoundingBoxDescent || 0;
+    return { tw: m.width, ascent, descent };
+  };
+  let r = measure(fs);
+  let bw = r.tw + 2 * padX;
+  if (bw > maxW && r.tw > 0) {
+    fs = fs * ((maxW - 2 * padX) / r.tw);
+    r = measure(fs);
+    bw = r.tw + 2 * padX;
   }
-  const capH = ctx.measureText("H").actualBoundingBoxAscent || fs * 0.7;
-  return { fs, bw, bh: 1.5 * fs, capH };
+  return { fs, bw, bh: r.ascent + r.descent + 2 * padY, ascent: r.ascent, descent: r.descent };
 }
 
 function drawLabel(
@@ -423,7 +493,8 @@ function drawLabel(
   ctx.font = labelFont(m.fs, family);
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
-  ctx.fillText(text, cx + offsetX, top + m.bh / 2 + m.capH / 2);
+  const inkH = m.ascent + m.descent;
+  ctx.fillText(text, cx + offsetX, top + (m.bh - inkH) / 2 + m.ascent);
   ctx.restore();
 }
 
@@ -446,14 +517,17 @@ export function render(
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = "#1a1a1a";
   ctx.fillRect(0, 0, W, H);
-  if (image) drawCover(ctx, image, W, H, p.imageZoom, p.imageX, p.imageY);
+  if (image) {
+    const c = coverRect(image, W, H, p.imageZoom, p.imageX, p.imageY);
+    ctx.drawImage(image.source, c.x, c.y, c.dw, c.dh);
+  }
 
   const progress: number[] = [];
   for (const r of scene.rows) {
     const pr = rowProgress(scene, p, r, t);
     progress[r.index] = pr;
     const mult = rowMultiplier(scene, r, t);
-    const w = Math.max(1, p.unit * scale * mult * (r.half === p.focus ? 2 : 1));
+    const w = Math.max(1, p.unit * scale * (mult + (r.half === p.focus ? 1 : 0)));
     const holeL = r.holeL * scale * pr;
     const holeR = r.holeR * scale * pr;
     const y0 = Math.round(r.y0 * scale);
@@ -467,22 +541,21 @@ export function render(
     drawStripes(ctx, edgeR, Math.round(edgeR), W, y0, h, w, r.phase, cA, cB);
   }
 
-  // Labels. Stage + date live on the closed card and fold away into the seam
-  // as it opens; the artist name unfolds from the bottom once the last rows open.
-  // Measured on the reference: the closed-card labels are gone by ~30% of the
-  // seam rows' progress, sliding ~35% of their half-width on the way out; the
-  // artist name is fully unfolded at ~90% of the last row's progress.
+  // Labels. Stage + date live on the closed card and fold into the seam as
+  // its rows open (gone by ~30% of their progress, sliding sideways on the
+  // way); the artist name unfolds along the bottom on its own clock.
   const S = Math.min(W, H);
   const nTop = scene.rows.filter((r) => r.half === "top").length;
   const pSeamTop = progress[nTop - 1] ?? 0;
   const pSeamBot = progress[nTop] ?? pSeamTop;
-  const pLast = progress[scene.rows.length - 1] ?? 0;
   const fam = p.fontFamily || "Manrope";
   const foldOut = (pr: number) => Math.min(1, pr / 0.3);
-  const unfold = (pr: number) => Math.min(1, pr / 0.9);
+  const slide = 0.11 * S;
 
-  const stage = measureLabel(ctx, p.stage, 0.1 * S, fam, W * 0.92);
-  const stageTop = H / 2 + 0.046 * S - stage.bh;
+  const padX = 0.016 * S;
+  const padY = 0.0435 * S;
+  const stage = measureLabel(ctx, p.stage, 0.085 * S, fam, padX, padY, W * 0.92, true);
+  const stageTop = H / 2 + 0.048 * S - stage.bh;
   drawLabel(
     ctx,
     p.stage,
@@ -491,11 +564,11 @@ export function render(
     cx,
     stageTop,
     (stage.bw / 2) * (1 - foldOut(pSeamTop)),
-    -0.35 * foldOut(pSeamTop) * (stage.bw / 2),
+    -slide * foldOut(pSeamTop),
     p.colors,
   );
-  const date = measureLabel(ctx, p.date, 0.05 * S, fam, W * 0.92);
-  const dateTop = stageTop + stage.bh + 0.02 * S;
+  const date = measureLabel(ctx, p.date, 0.042 * S, fam, padX, padY, W * 0.92, true);
+  const dateTop = stageTop + stage.bh + 0.0185 * S;
   drawLabel(
     ctx,
     p.date,
@@ -504,19 +577,22 @@ export function render(
     cx,
     dateTop,
     (date.bw / 2) * (1 - foldOut(pSeamBot)),
-    0.35 * foldOut(pSeamBot) * (date.bw / 2),
+    slide * foldOut(pSeamBot),
     p.colors,
   );
-  const artist = measureLabel(ctx, p.artist, 0.15 * S, fam, W * 0.85);
+
+  const ac = scene.artist;
+  const pa = segmentProgress(scene, t, ac.openAt, ac.openD, ac.closeAt, ac.closeD);
+  const artist = measureLabel(ctx, p.artist, 0.14 * S, fam, 0.0175 * S, 0.022 * S, W * 0.92, false);
   drawLabel(
     ctx,
     p.artist,
     artist,
     fam,
     cx,
-    H - artist.bh,
-    (artist.bw / 2) * unfold(pLast),
-    -0.35 * (1 - unfold(pLast)) * (artist.bw / 2),
+    H - 0.058 * S - artist.bh,
+    (artist.bw / 2) * pa,
+    -0.12 * S * (1 - pa),
     p.colors,
   );
   ctx.restore();

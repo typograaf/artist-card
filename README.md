@@ -17,21 +17,30 @@ npm run build    # dist/
 ## Controls
 
 - **Format** 4:5, 16:9, 9:16, 1:1 (1080-based canvases, export at 1x or 2x).
-- **Rows** top / bottom counts. **Focus** picks the half whose blocks are 2x thick.
-- **Blocks** unit size, independent movement amount, seed. Each row's block
-  width is 1, 2 or 3 units and animates between those values (a horizontal
-  scale about the seam) with the opening easing and stagger, plus seeded
-  extra moves during the holds when "Independent movement" is above 0.
-- **Opening** duration, stagger per row, stagger order, easing (presets or a
-  custom cubic-bezier).
-- **Opening shape** hole size, variation and seed: how far each row's two
-  halves slide apart, snapped to a 2-unit grid.
+- **Background image** load / remove, cover-fit with zoom and position;
+  drag the preview to reposition.
+- **Text** artist, stage, date; label font by Google Fonts name (weight 800
+  when the family has it) or a local font file.
 - **Timeline** hold closed / hold open; the loop is closed hold, open, open
-  hold, close. Space plays and pauses, the Time slider scrubs.
-- **Text / Colours / Background image** labels, label font (Google Fonts
-  name or a local font file), six colours, cover-fit image with zoom and
-  position.
-- **Settings** copy / paste the whole state as JSON.
+  hold, close. Space plays and pauses, the Time slider scrubs, arrow keys
+  step one frame (Shift: ten), Home goes to the start.
+- **Rows** top / bottom counts. **Thick blocks** picks the half whose blocks
+  are one unit thicker (2/3/4 units instead of 1/2/3, as measured in the
+  reference).
+- **Blocks** unit size, extra block moves, seed. Each row's block width is
+  1, 2 or 3 units and animates between neighbouring values (a horizontal
+  scale about the seam) with the opening easing and stagger, plus seeded
+  extra moves during the holds when "Extra block moves" is above 0. Moves
+  never overlap, and the loop returns to its starting widths.
+- **Opening** duration, stagger per row, stagger order (closing runs in the
+  reverse order, outer rows first, like the reference), easing (presets or a
+  custom cubic-bezier; the same curve drives the block moves).
+- **Opening shape** hole width, irregularity and seed: how far each row's two
+  halves slide apart, snapped to a 2-unit grid, never widening away from the
+  seam.
+- **Colours** the two pairs plus label background and text.
+- **Settings** copy / paste the whole state as JSON (values are clamped).
 
-The default easing `cubic-bezier(0.70, 0.15, 0.05, 0.80)` and the label
-fold timings were measured from the reference video.
+The default easing `cubic-bezier(0.80, 0.10, 0.10, 0.80)`, the 0.15 s
+stagger, the label boxes and their fold timings were measured from the
+reference video.

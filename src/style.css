@@ -546,9 +546,28 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   min-width: 0;
 }
 .field > span {
-  font: 500 8px/normal var(--font-medium);
+  font: 500 12px/normal var(--font-medium);
   color: var(--text);
 }
+.field-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+}
+.field-status {
+  font-size: 8px;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+.sub-title,
+.hint {
+  font: 500 12px/normal var(--font-medium);
+  color: var(--text);
+}
+.hint { opacity: 0.6; }
+.stage.panning { cursor: grabbing; }
+#canvas.has-image { cursor: grab; }
 .field input[type="number"],
 .text-input,
 .seg4 input[type="number"] {
@@ -641,7 +660,5 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   width: 100%;
   text-transform: uppercase;
 }
-#canvas.has-image ~ .stage-overlay { pointer-events: none; }
-#canvas.has-image ~ .stage-overlay.dragover { pointer-events: auto; }
-.stage-overlay { pointer-events: auto; }
+#canvas.has-image ~ .stage-overlay { cursor: grab; }
 .stage.dragover .stage-overlay-msg { opacity: 1; }
