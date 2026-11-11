@@ -194,6 +194,7 @@ input[type="text"].center { text-align: center; }
 
 /* ---------- PREVIEW ---------- */
 .preview {
+  background: var(--surface);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -247,7 +248,6 @@ input[type="text"].center { text-align: center; }
   display: flex;
   align-items: flex-end;
 }
-.frame.playing { color: #111; }
 .ticks {
   flex: 1 1 0;
   min-width: 0;
@@ -261,7 +261,7 @@ input[type="text"].center { text-align: center; }
   display: block;
   width: 3px;
   height: 9px;
-  background: var(--surface);
+  background: var(--surface-active);
   flex: 0 0 3px;
 }
 .ticks > i.on { background: var(--text); }
