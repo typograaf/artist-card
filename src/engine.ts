@@ -408,16 +408,24 @@ export function buildScene(p: Params): Scene {
   // bottom row and closes with it.
   const ease = bezierEase(p.easing);
   const wordsOf = (t: string) => t.trim().split(/\s+/).filter(Boolean).length;
-  const labelD = 0.8 * p.duration;
-  const labelStagger = p.stagger;
-  const groupSpan = (blocks: number) => (Math.max(1, blocks) - 1) * labelStagger + labelD;
   const bottomRow = rows[n - 1];
   const bottomDelay = p.stagger * bottomRow.rank;
   const bottomCloseDelay = span - bottomDelay;
   const seamBlocks = wordsOf(p.stage) + wordsOf(p.day);
   const artistBlocks = [p.timeStart, p.timeEnd].filter((t) => t.trim()).length + wordsOf(p.artist) + wordsOf(p.stage);
+  const seamDelay = Math.min(p.stagger * rows[nTop - 1].rank, p.stagger * (rows[nTop]?.rank ?? Infinity));
+  const seamOpenAt = tOpen + seamDelay;
+  const artistOpenAt = tOpen + bottomDelay + 1.5 * p.stagger;
+  // One speed for every label move: block length 0.8 x the opening time and
+  // one row stagger between blocks, scaled down (together) just enough for
+  // the seam blocks to be gone before the artist group starts.
+  const fullSpan = (blocks: number) => (Math.max(1, blocks) - 1) * p.stagger + 0.8 * p.duration;
+  const k = Math.min(1, Math.max(0.1, artistOpenAt - seamOpenAt - 0.05) / fullSpan(seamBlocks));
+  const labelD = 0.8 * p.duration * k;
+  const labelStagger = p.stagger * k;
+  const groupSpan = (blocks: number) => (Math.max(1, blocks) - 1) * labelStagger + labelD;
   const artist: LabelClock = {
-    openAt: tOpen + bottomDelay + 1.5 * p.stagger,
+    openAt: artistOpenAt,
     openD: labelD,
     openStagger: labelStagger,
     closeAt: tClose + bottomCloseDelay,
@@ -425,15 +433,10 @@ export function buildScene(p: Params): Scene {
     closeStagger: labelStagger,
   };
   const artistGone = artist.closeAt + groupSpan(artistBlocks);
-  const seamDelay = Math.min(p.stagger * rows[nTop - 1].rank, p.stagger * (rows[nTop]?.rank ?? Infinity));
-  // the seam blocks must be gone before the artist group starts: fold out
-  // faster (same proportions) when the full length would not fit
-  const seamOpenAt = tOpen + seamDelay;
-  const kOpen = Math.min(1, Math.max(0.1, artist.openAt - seamOpenAt - 0.05) / groupSpan(seamBlocks));
   const seam: LabelClock = {
     openAt: seamOpenAt,
-    openD: labelD * kOpen,
-    openStagger: labelStagger * kOpen,
+    openD: labelD,
+    openStagger: labelStagger,
     closeAt: Math.max(tCloseEnd, artistGone + 0.05),
     closeD: labelD,
     closeStagger: labelStagger,
