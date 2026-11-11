@@ -415,15 +415,14 @@ export function buildScene(p: Params): Scene {
   const artistBlocks = [p.timeStart, p.timeEnd].filter((t) => t.trim()).length + wordsOf(p.artist) + wordsOf(p.stage);
   const seamDelay = Math.min(p.stagger * rows[nTop - 1].rank, p.stagger * (rows[nTop]?.rank ?? Infinity));
   const seamOpenAt = tOpen + seamDelay;
-  const artistOpenAt = tOpen + bottomDelay + 1.5 * p.stagger;
-  // One speed for every label move: block length 0.8 x the opening time and
-  // one row stagger between blocks, scaled down (together) just enough for
-  // the seam blocks to be gone before the artist group starts.
-  const fullSpan = (blocks: number) => (Math.max(1, blocks) - 1) * p.stagger + 0.8 * p.duration;
-  const k = Math.min(1, Math.max(0.1, artistOpenAt - seamOpenAt - 0.05) / fullSpan(seamBlocks));
-  const labelD = 0.8 * p.duration * k;
-  const labelStagger = p.stagger * k;
+  // One pace for every label move: block length 0.8 x the opening time and
+  // one row stagger between blocks. Nothing speeds up to avoid overlap:
+  // the artist group waits until the seam blocks are gone, and the seam
+  // blocks come back once the artist group is gone.
+  const labelD = 0.8 * p.duration;
+  const labelStagger = p.stagger;
   const groupSpan = (blocks: number) => (Math.max(1, blocks) - 1) * labelStagger + labelD;
+  const artistOpenAt = Math.max(tOpen + bottomDelay + 1.5 * p.stagger, seamOpenAt + groupSpan(seamBlocks) + 0.05);
   const artist: LabelClock = {
     openAt: artistOpenAt,
     openD: labelD,
