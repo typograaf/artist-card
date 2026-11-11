@@ -30,7 +30,7 @@ export interface Params {
   unit: number; // block unit in px at 1x
   focus: Focus; // this half gets one unit thicker blocks (2/3/4 vs 1/2/3)
   blockSeed: number;
-  movement: number; // 0..1 amount of extra block moves during the holds
+  movement: number; // 0..1 block motion: drift amplitude + extra width keyframes
   holeSize: number; // 0..1 of half the width
   holeVariation: number; // 0..1
   shapeSeed: number;
@@ -72,7 +72,7 @@ export const DEFAULT_PARAMS: Params = {
   holeVariation: 0.3,
   shapeSeed: 3,
   duration: 1.6,
-  moveDuration: 3,
+  moveDuration: 2.6,
   stagger: 0.15,
   staggerOrder: "center",
   easing: [0.7, 0.1, 0.1, 0.9],
@@ -154,11 +154,10 @@ export function bezierEase(b: Bezier): (x: number) => number {
 
 // ---------- scene model ----------
 
-export interface Move {
-  t: number; // start time (s)
-  d: number; // duration (s)
-  from: number;
-  to: number;
+/** A keyframe; consecutive keyframes are joined by the opening easing. */
+export interface Key {
+  t: number;
+  v: number;
 }
 
 export interface RowSpec {
@@ -170,10 +169,12 @@ export interface RowSpec {
   delay: number; // opening delay (s)
   closeDelay: number; // closing delay (s), mirrored so outer rows close first
   phase: number; // 0..2 block widths
-  m0: number; // multiplier in the closed (loop) state
+  m0: number; // width multiplier at the start of the opening
+  anchor: number; // x (px at 1x) the pattern scales about; off-centre on purpose
   holeL: number; // px at 1x, fully open
   holeR: number;
-  moves: Move[];
+  widthKeys: Key[]; // multiplier chain over [openAt, openAt + total]
+  shiftKeys: Key[]; // sideways drift (px at 1x) over [0, total]
 }
 
 export interface Timeline {
@@ -212,6 +213,14 @@ function pickStep(current: number, r: number): number {
   return r < 0.5 ? 1 : 3;
 }
 
+/** Next multiplier one step away from `cur`, avoiding `avoid` when possible. */
+function nextValue(cur: number, avoid: number, r: number): number {
+  const options = [cur - 1, cur + 1].filter((m) => m >= 1 && m <= 3);
+  const preferred = options.filter((m) => m !== avoid);
+  const pool = preferred.length ? preferred : options;
+  return pool[Math.min(pool.length - 1, Math.floor(r * pool.length))];
+}
+
 export function buildScene(p: Params): Scene {
   const [W, H] = FORMATS[p.format];
   const nTop = clampInt(p.rowsTop, 1, 24);
@@ -237,9 +246,11 @@ export function buildScene(p: Params): Scene {
       closeDelay: 0,
       phase: 0,
       m0: 1,
+      anchor: 0,
       holeL: 0,
       holeR: 0,
-      moves: [],
+      widthKeys: [],
+      shiftKeys: [],
     });
   }
   const maxRank = rows.reduce((m, r) => Math.max(m, r.rank), 0);
@@ -285,58 +296,79 @@ export function buildScene(p: Params): Scene {
     rows[i].holeR = Math.min(rows[i].holeR, rows[i - 1].holeR);
   }
 
-  // Block width transitions. Measured on the reference: each row's width is
-  // changing about 45% of the time in ~3 s eased transitions. The opening
-  // transition starts with the row's hole (same stagger, same curve, longer),
-  // extra transitions fill the open hold, and the closing transition starts
-  // with the hole closing and may run on across the loop point (the card is
-  // closed and static, the blocks still glide), exactly like the video.
-  const d = p.duration;
+  // Block motion. The reference slit-scans show every block edge as a
+  // continuous curve: the pattern drifts sideways while its block width
+  // changes, scaling about a point that is not the seam (so left and right
+  // move differently), and no edge ever sits still. Both quantities are
+  // keyframe chains joined by the opening easing, like easy-eased keyframes:
+  // the width chain starts a transition with the row's opening and another
+  // with its closing (same stagger as the hole), the drift chain runs free.
+  const D = Math.max(0.2, p.moveDuration);
   const T = tl.total;
   for (const r of rows) {
     const k = r.index;
-    const moves: Move[] = [];
-    let m = r.m0;
+    const jit = (key: number) => 0.75 + rand(p.blockSeed, k, key) * 0.5;
     const openAt = tOpen + r.delay;
     const closeAt = tClose + r.closeDelay;
-    // the closing transition must end before the next loop's opening one
-    const closeD = Math.max(0.1, Math.min(p.moveDuration, T + openAt - closeAt));
-    const openD = Math.max(0.1, Math.min(p.moveDuration, closeAt - openAt));
-    const m1 = pickStep(m, rand(p.blockSeed, k, 3));
-    moves.push({ t: openAt, d: openD, from: m, to: m1 });
-    m = m1;
-    const a = openAt + openD;
-    const L = Math.max(0, closeAt - a);
-    const nMax = Math.floor(L / p.moveDuration);
-    const nIdle = Math.min(nMax, Math.floor((p.movement * L) / p.moveDuration + rand(p.blockSeed, k, 30)));
-    if (nIdle > 0) {
-      // holds between transitions: the leftover time split by seeded weights
+    r.anchor = W * (0.3 + 0.4 * rand(p.blockSeed, k, 7));
+
+    // width chain
+    const keys: Key[] = [{ t: openAt, v: r.m0 }];
+    let v = r.m0;
+    const openSpan = closeAt - openAt;
+    let t = openAt + Math.min(D * jit(100), openSpan * 0.6);
+    v = pickStep(v, rand(p.blockSeed, k, 3));
+    keys.push({ t, v });
+    const L = closeAt - t;
+    if (p.movement > 0) {
+      const n = Math.max(0, Math.round((p.movement * L) / D));
       const weights: number[] = [];
       let sum = 0;
-      for (let j = 0; j <= nIdle; j++) {
-        const wgt = 0.2 + rand(p.blockSeed, k, 40 + j);
+      for (let j = 0; j <= n; j++) {
+        const wgt = jit(110 + j);
         weights.push(wgt);
         sum += wgt;
       }
-      const spare = L - nIdle * p.moveDuration;
-      let t = a;
-      for (let j = 0; j < nIdle; j++) {
-        t += (spare * weights[j]) / sum;
-        const to = pickStep(m, rand(p.blockSeed, k, 60 + j));
-        moves.push({ t, d: p.moveDuration, from: m, to });
-        m = to;
-        t += p.moveDuration;
+      for (let j = 0; j < n; j++) {
+        t += (L * weights[j]) / sum;
+        v = pickStep(v, rand(p.blockSeed, k, 130 + j));
+        keys.push({ t, v });
+      }
+      // the value reached when the closing starts: not the loop value, so
+      // the closing transition is a real move
+      v = nextValue(v, r.m0, rand(p.blockSeed, k, 150));
+    }
+    keys.push({ t: closeAt, v });
+    keys.push({ t: openAt + T, v: r.m0 });
+    r.widthKeys = keys;
+
+    // sideways drift chain over [0, T], seamless
+    const base = p.unit * (r.half === p.focus ? 3 : 2);
+    const shift: Key[] = [{ t: 0, v: 0 }];
+    if (p.movement > 0) {
+      const durs: number[] = [];
+      let acc = 0;
+      let j = 0;
+      while (acc < T) {
+        const dd = D * (0.7 + rand(p.blockSeed, k, 200 + j) * 0.8);
+        durs.push(dd);
+        acc += dd;
+        j++;
+      }
+      const scaleT = T / acc;
+      let tt = 0;
+      let sv = 0;
+      for (let i = 0; i < durs.length - 1; i++) {
+        tt += durs[i] * scaleT;
+        let delta = (0.4 + 0.6 * rand(p.blockSeed, k, 230 + i)) * base * p.movement;
+        if (rand(p.blockSeed, k, 260 + i) < 0.5) delta = -delta;
+        if (Math.abs(sv + delta) > base) delta = -delta;
+        sv += delta;
+        shift.push({ t: tt, v: sv });
       }
     }
-    if (m === r.m0) {
-      // nothing to return to: bounce out and back so the row still glides
-      const via = pickStep(m, rand(p.blockSeed, k, 90));
-      moves.push({ t: closeAt, d: closeD / 2, from: m, to: via });
-      moves.push({ t: closeAt + closeD / 2, d: closeD / 2, from: via, to: r.m0 });
-    } else {
-      moves.push({ t: closeAt, d: closeD, from: m, to: r.m0 });
-    }
-    r.moves = moves;
+    shift.push({ t: T, v: 0 });
+    r.shiftKeys = shift;
   }
 
   // The artist name has its own clock: it starts a beat after the bottom row
@@ -344,9 +376,9 @@ export function buildScene(p: Params): Scene {
   const bottom = rows[n - 1];
   const artist: LabelClock = {
     openAt: tOpen + bottom.delay + 1.5 * p.stagger,
-    openD: 0.8 * d,
+    openD: 0.8 * p.duration,
     closeAt: tClose + bottom.closeDelay,
-    closeD: 0.75 * d,
+    closeD: 0.75 * p.duration,
   };
   return { W, H, rows, tl, artist, ease: bezierEase(p.easing) };
 }
@@ -382,22 +414,31 @@ export function rowProgress(scene: Scene, p: Params, r: RowSpec, t: number): num
   );
 }
 
-/** Block width multiplier (1..3 non-focus, fractional while moving) at time t. */
-export function rowMultiplier(scene: Scene, r: RowSpec, t: number): number {
-  const T = scene.tl.total;
-  // closing transitions may run past the loop point into the next cycle
-  for (const mv of r.moves) {
-    if (mv.t + mv.d > T && t + T >= mv.t && t + T < mv.t + mv.d) {
-      return mv.from + (mv.to - mv.from) * eased(scene, (t + T - mv.t) / mv.d);
+/** Evaluate a keyframe chain that covers one loop starting at keys[0].t. */
+function evalChain(scene: Scene, keys: Key[], t: number): number {
+  if (keys.length < 2) return keys[0]?.v ?? 0;
+  const t0 = keys[0].t;
+  const period = keys[keys.length - 1].t - t0;
+  const tt = period > 0 ? t0 + ((((t - t0) % period) + period) % period) : t0;
+  for (let i = 0; i < keys.length - 1; i++) {
+    const a = keys[i];
+    const b = keys[i + 1];
+    if (tt >= a.t && tt < b.t) {
+      if (b.v === a.v) return a.v;
+      return a.v + (b.v - a.v) * eased(scene, (tt - a.t) / (b.t - a.t));
     }
   }
-  let m = r.m0;
-  for (const mv of r.moves) {
-    if (t < mv.t) break;
-    if (t < mv.t + mv.d) return mv.from + (mv.to - mv.from) * eased(scene, (t - mv.t) / mv.d);
-    m = mv.to;
-  }
-  return m;
+  return keys[keys.length - 1].v;
+}
+
+/** Block width multiplier (1..3 non-focus, fractional while moving) at time t. */
+export function rowMultiplier(scene: Scene, r: RowSpec, t: number): number {
+  return evalChain(scene, r.widthKeys, t);
+}
+
+/** Sideways drift of the row's pattern (px at 1x) at time t. */
+export function rowShift(scene: Scene, r: RowSpec, t: number): number {
+  return evalChain(scene, r.shiftKeys, t);
 }
 
 // ---------- rendering ----------
@@ -567,15 +608,15 @@ export function render(
     const w = Math.max(1, p.unit * scale * (mult + (r.half === p.focus ? 1 : 0)));
     const holeL = r.holeL * scale * pr;
     const holeR = r.holeR * scale * pr;
+    const origin = (r.anchor + rowShift(scene, r, t)) * scale;
     const y0 = Math.round(r.y0 * scale);
     const y1 = Math.round(r.y1 * scale);
     const h = y1 - y0;
     const cA = r.half === "top" ? p.colors.topA : p.colors.bottomA;
     const cB = r.half === "top" ? p.colors.topB : p.colors.bottomB;
-    const edgeL = cx - holeL;
-    const edgeR = cx + holeR;
-    drawStripes(ctx, edgeL, 0, Math.round(edgeL), y0, h, w, r.phase, cA, cB);
-    drawStripes(ctx, edgeR, Math.round(edgeR), W, y0, h, w, r.phase, cA, cB);
+    // each half carries its pattern along with its hole edge
+    drawStripes(ctx, origin - holeL, 0, Math.round(cx - holeL), y0, h, w, r.phase, cA, cB);
+    drawStripes(ctx, origin + holeR, Math.round(cx + holeR), W, y0, h, w, r.phase, cA, cB);
   }
 
   // Labels. Stage + date live on the closed card and fold into the seam as

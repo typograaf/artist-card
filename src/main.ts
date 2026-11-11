@@ -271,8 +271,8 @@ const pct = (v: number) => `${Math.round(v * 100)}%`;
 const secs = (v: number) => `${v.toFixed(2)} s`;
 const sliderDefs: SliderDef[] = [
   { key: "unit", label: "Block unit", min: 12, max: 160, step: 1, format: (v) => `${v.toFixed(0)}px`, container: "blockSliders", title: "Width of one block unit at 1x; rows use 1, 2 or 3 units" },
-  { key: "movement", label: "Extra block moves", min: 0, max: 1, step: 0.01, format: pct, container: "blockSliders", title: "How much of the open hold the blocks keep changing width on their own; 100% is near-continuous" },
-  { key: "moveDuration", label: "Block move length", min: 0.5, max: 6, step: 0.05, format: secs, container: "blockSliders", title: "Length of one block-width transition; the reference glides for about 3 s" },
+  { key: "movement", label: "Block motion", min: 0, max: 1, step: 0.01, format: pct, container: "blockSliders", title: "Sideways drift and extra width changes between the opening and the closing; 0 freezes the holds" },
+  { key: "moveDuration", label: "Block move length", min: 0.5, max: 6, step: 0.05, format: secs, container: "blockSliders", title: "Spacing of the block keyframes; the reference glides for about 3 s per change" },
   { key: "duration", label: "Duration", min: 0.1, max: 4, step: 0.05, format: secs, container: "openSliders" },
   { key: "stagger", label: "Stagger per row", min: 0, max: 1, step: 0.01, format: secs, container: "openSliders" },
   { key: "holeSize", label: "Hole width", min: 0, max: 1, step: 0.01, format: pct, container: "shapeSliders", title: "How far the seam rows open, as a share of the width" },
