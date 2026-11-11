@@ -21,7 +21,7 @@ function slug(s: string): string {
 }
 
 export function fileStem(p: Params, scale: number): string {
-  const parts = [slug(p.artist), slug(p.date)].filter(Boolean);
+  const parts = [slug(p.artist), slug(p.day)].filter(Boolean);
   const name = parts.length ? parts.join("-") : "artist-card";
   return `${name}-${p.format.replace(":", "x")}@${scale}x`;
 }

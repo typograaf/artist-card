@@ -1,10 +1,15 @@
-# Artist Card
+# Motion Tool (Touquet 2027 artist card)
 
-Row-reveal artist card generator. Two halves of horizontal rows, each a strip of
-equal-width blocks, split at the centre seam and slide open to reveal a photo
-through a stepped hole. Stage name and date live on the closed card; the artist
-name unfolds along the bottom once the card is open. Exports PNG stills and
-one-loop H.264 MP4s.
+Row-reveal artist card generator. Two halves of horizontal rows, each a strip
+of two-colour stripes, split at the centre seam and slide open to reveal a
+photo. The stage name and day sit on the closed card; the times, artist name
+and stage unfold as word blocks once the card is open. Exports PNG stills and
+one-loop H.264 MP4s (1080 wide, 30 fps).
+
+The UI and the card follow the Figma design in Touquet-2027 (frames 229:94,
+232:1464); the label blocks reproduce its metrics exactly (Avantt Bold, -2%
+tracking, cap-height trimmed text boxes, 3 px side and 12/24 or 18/18 px
+vertical padding at 540 wide, 4.5 px gaps).
 
 ## Run
 
@@ -14,43 +19,66 @@ npm run dev      # http://localhost:5173
 npm run build    # dist/
 ```
 
+Avantt Bold and SemiBold are expected in `public/fonts/` (licensed, not in
+the repo).
+
 ## Controls
 
-- **Format** 4:5, 16:9, 9:16, 1:1 (1080-based canvases, export at 1x or 2x).
-- **Background image** load / remove, cover-fit with zoom; drag the preview
-  to reposition.
-- **Text** artist, stage, date. Labels are set in Avantt Bold at -2%
-  tracking (the reference's font); the font files are expected in
-  `public/fonts/` and are not part of the repo (licensed).
-- **Timeline** hold closed / hold open; the loop is closed hold, open, open
-  hold, close. Space plays and pauses, the Time slider scrubs, arrow keys
-  step one frame (Shift: ten), Home goes to the start.
-- **Rows** top / bottom counts. **Thick blocks** picks the half whose blocks
-  are one unit thicker (2/3/4 units instead of 1/2/3, as measured in the
-  reference).
-- **Blocks** unit size, move length min/max, travel min/max, seed. Each
-  row's pattern is never still: its block width glides between 1, 2 and 3
-  units and the whole pattern drifts sideways, both as chains of easy-eased
-  keyframes with random spacing between the two move lengths and sideways
-  steps between the two travel distances, joined by the opening easing. The
-  width chain starts a transition with the row's opening and another with
-  its closing (same stagger as the hole, running on across the loop point);
-  the drift chain runs free and seamless. The pattern scales about a seeded
-  point away from the seam, so left and right halves move differently.
-- **Floating blocks** per-row count (0 = none), size min/max in units, own
-  move length and travel ranges:
-  masks inside each open row showing their own two-colour stripes (changing
-  like the rows), growing, shrinking to nothing and back (spawn / despawn)
-  and drifting, clipped to the hole.
-- **Opening** duration, stagger per row, stagger order (closing runs in the
-  reverse order, outer rows first, like the reference), easing (presets or a
-  custom cubic-bezier; the same curve drives the block moves).
-- **Opening shape** hole width, irregularity and seed: how far each row's two
-  halves slide apart, snapped to a 2-unit grid, never widening away from the
-  seam; 100% opens every row fully.
-- **Colours** the two pairs plus label background and text.
-- **Settings** copy / paste the whole state as JSON (values are clamped).
+Left column:
 
-The default easing `cubic-bezier(0.70, 0.10, 0.10, 0.90)` over 1.6 s, the
-0.15 s stagger, the ~2.6 s block keyframes, the label boxes and their fold
-timings were all measured from the reference video.
+- **Format** 4:5, 1:1, 16:9, 9:16 (1080-based canvases).
+- **Day, Time, Artist, Stage** every word becomes its own block. The day is
+  set in capitals, the stage is as typed on the closed card and in capitals
+  under the artist name. **Image** loads or removes the photo (or drop one
+  on the preview, paste one, or click an empty card).
+- **Hold closed, Opening time, Opening %, Hold open** the loop is closed
+  hold, open, open hold, close. Opening % is how far the rows slide apart;
+  the edge blocks stay on top of that.
+- **Rows top / bottom** row counts.
+- **Rows stagger** seconds between rows; **Irregularity %** extra blocks
+  left standing per row and side, more towards the outer rows; **Shape
+  seed**; **Top / Bottom / Centre** stagger order (closing runs in reverse).
+
+Right column:
+
+- **Block width** widest edge block left in an open row, in units (one unit
+  is the card's short side / 24); the edge blocks breathe between that and
+  two units less, never resting. **Block travel** largest sideways step of a
+  row's pattern in units. **Block seed**.
+- **Floaters** number of floating blocks spread over the open rows (0 =
+  none), **Floaters size** largest in units (smallest is half), **Floaters
+  travel** largest sideways step in px on the 1080 canvas. They show their
+  own stripes, grow, shrink to nothing and back, and drift.
+- **Top / Bottom colours** click a swatch for a picker, hover it and press
+  Cmd+V to paste a hex (with or without #), `?` picks one of the thirteen
+  Touquet pairs.
+- **Copy / Paste settings** the whole state as JSON (values are clamped).
+- **Export MP4 / PNG**.
+
+Preview:
+
+- Drag the artist block group up or down to place it (vertical only, saved
+  in the settings as `labelY`).
+- Drag the photo to reposition it; scroll over the card to zoom it about the
+  pointer; scroll outside the card to resize the preview.
+- The timeline under the card: click the frame number or press Space to
+  play / pause, drag the ticks to scrub, arrow keys step one frame (Shift:
+  ten), Home restarts.
+
+Hidden defaults (no UI, set via paste settings): `focus` (which half starts
+with 3-unit stripes, default bottom), `moveMin` / `moveMax` (1.8 / 3.6 s
+block keyframe spacing), `floatMoveMin` / `floatMoveMax` (1 / 2.5 s), the
+easing `cubic-bezier(0.70, 0.10, 0.10, 0.90)` measured on the reference.
+
+## Model
+
+Every row's pattern is never still: its stripe width glides between 1, 2
+and 3 units and the whole pattern drifts sideways, both as chains of
+easy-eased keyframes with random spacing, joined by the opening easing. The
+stripe chain starts a transition with the row's opening and returns to the
+closed width with its closing; the drift chain runs free and seamless. The
+pattern scales about a seeded point away from the seam, so left and right
+halves move differently. The edge blocks of an open row have their own
+integer chain.
+
+`analysis/` holds the scripts used to measure the original reference video.

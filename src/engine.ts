@@ -23,26 +23,26 @@ export interface Colors {
   labelText: string;
 }
 
+/** One block unit is the card's short side divided by this. */
+export const UNITS_ACROSS = 24;
+
 export interface Params {
   format: Format;
   rowsTop: number;
   rowsBottom: number;
-  unit: number; // block unit in px at 1x
-  focus: Focus; // this half gets one unit thicker blocks (2/3/4 vs 1/2/3)
+  focus: Focus; // this half's stripes start three units wide (the other: one)
+  blockWidth: number; // units, widest edge block left in an open row
+  blockTravel: number; // units, largest sideways step of a row's pattern
   blockSeed: number;
   moveMin: number; // s, shortest block keyframe transition
   moveMax: number; // s, longest
-  travelMin: number; // px at 1x, smallest sideways step per keyframe
-  travelMax: number; // px at 1x, largest
-  floatCount: number; // floating blocks per open row
-  floatMin: number; // units, smallest floating block
-  floatMax: number; // units, largest
+  floatCount: number; // floating blocks spread over the open rows (0 = none)
+  floatSize: number; // units, largest floating block (smallest is half)
+  floatTravel: number; // px at 1x, largest floating-block sideways step
   floatMoveMin: number; // s, floating block keyframe spacing
   floatMoveMax: number;
-  floatTravelMin: number; // px at 1x, floating block sideways step
-  floatTravelMax: number;
-  holeSize: number; // 0..1; 1 = every row fully open
-  holeVariation: number; // 0..1
+  opening: number; // 0..100, how far the rows open
+  irregularity: number; // 0..100, extra blocks per row and side
   shapeSeed: number;
   duration: number; // s, one row's open/close transition
   stagger: number; // s between row ranks
@@ -51,67 +51,80 @@ export interface Params {
   holdClosed: number; // s
   holdOpen: number; // s
   colors: Colors;
+  day: string;
+  timeStart: string;
+  timeEnd: string;
   artist: string;
   stage: string;
-  date: string;
+  labelY: number; // 0..1, top of the artist label group as a fraction of H
   fontFamily: string;
   imageZoom: number; // 1..
   imageX: number; // -1..1 (set by dragging the preview)
   imageY: number; // -1..1
 }
 
-export const EASING_PRESETS: Record<string, Bezier> = {
-  Measured: [0.7, 0.1, 0.1, 0.9],
-  "Ease in-out": [0.42, 0, 0.58, 1],
-  Snap: [0.85, 0, 0.15, 1],
-  "Ease out": [0, 0, 0.2, 1],
-  "Ease in": [0.6, 0, 1, 1],
-  Linear: [0, 0, 1, 1],
-};
+export const DEFAULT_EASING: Bezier = [0.7, 0.1, 0.1, 0.9];
 
 export const DEFAULT_PARAMS: Params = {
   format: "4:5",
   rowsTop: 4,
   rowsBottom: 4,
-  unit: 40,
-  focus: "top",
-  blockSeed: 7,
+  focus: "bottom",
+  blockWidth: 2,
+  blockTravel: 4,
+  blockSeed: 4,
   moveMin: 1.8,
   moveMax: 3.6,
-  travelMin: 30,
-  travelMax: 120,
-  floatCount: 0,
-  floatMin: 1,
-  floatMax: 2.5,
+  floatCount: 5,
+  floatSize: 2,
+  floatTravel: 100,
   floatMoveMin: 1,
   floatMoveMax: 2.5,
-  floatTravelMin: 40,
-  floatTravelMax: 200,
-  holeSize: 0.9,
-  holeVariation: 0.3,
-  shapeSeed: 3,
-  duration: 1.6,
+  opening: 100,
+  irregularity: 30,
+  shapeSeed: 1,
+  duration: 1.5,
   stagger: 0.15,
   staggerOrder: "center",
-  easing: [0.7, 0.1, 0.1, 0.9],
-  holdClosed: 1.8,
-  holdOpen: 4.1,
+  easing: DEFAULT_EASING,
+  holdClosed: 1.5,
+  holdOpen: 1.5,
   colors: {
-    topA: "#7E9EFC",
-    topB: "#0A06FD",
-    bottomA: "#FCA61A",
-    bottomB: "#FA7C01",
-    labelBg: "#FDEDA1",
+    topA: "#0C08FF",
+    topB: "#829FFF",
+    bottomA: "#00504E",
+    bottomB: "#00201F",
+    labelBg: "#FFEFA4",
     labelText: "#000000",
   },
-  artist: "Kaytranada",
-  stage: "MAIN STAGE",
-  date: "Vendredi 28.08",
+  day: "Thursday 28.08",
+  timeStart: "20:00",
+  timeEnd: "21:00",
+  artist: "Chris Stussy",
+  stage: "Main Stage",
+  labelY: 401 / 679,
   fontFamily: "Avantt",
   imageZoom: 1,
   imageX: 0,
   imageY: 0,
 };
+
+/** The Touquet colour pairs; the randomiser picks one of these. */
+export const COLOR_COMBOS: [string, string][] = [
+  ["#3F98FF", "#FFEFA4"],
+  ["#AA0026", "#FF979C"],
+  ["#212072", "#4C5EFF"],
+  ["#FFA81C", "#FC7E03"],
+  ["#01232C", "#027370"],
+  ["#63ECFF", "#007F59"],
+  ["#FFEFA4", "#A2A400"],
+  ["#FFA16C", "#640D00"],
+  ["#FFEFA4", "#FF979C"],
+  ["#80FFE3", "#027370"],
+  ["#AA0026", "#F64D1D"],
+  ["#E90062", "#AA0026"],
+  ["#65D36D", "#007F59"],
+];
 
 // ---------- deterministic randomness ----------
 
@@ -195,12 +208,14 @@ export interface RowSpec {
   rank: number;
   delay: number; // opening delay (s)
   closeDelay: number; // closing delay (s), mirrored so outer rows close first
-  phase: number; // 0..2 block widths
-  m0: number; // width multiplier at the start of the opening
+  phase: number; // 0..2 stripe widths
+  m0: number; // stripe multiplier at the start of the opening
   anchor: number; // x (px at 1x) the pattern scales about; off-centre on purpose
-  holeL: number; // px at 1x, fully open
-  holeR: number;
-  widthKeys: Key[]; // multiplier chain over [openAt, openAt + total]
+  remL: number; // units, blocks left standing at the edge when fully open (static part)
+  remR: number;
+  edgeL: Key[]; // units, extra edge block width chain (never still)
+  edgeR: Key[];
+  widthKeys: Key[]; // stripe multiplier chain over [openAt, openAt + total]
   shiftKeys: Key[]; // sideways drift (px at 1x) over [0, total]
   floaters: Floater[];
 }
@@ -224,6 +239,8 @@ export interface LabelClock {
 export interface Scene {
   W: number;
   H: number;
+  S: number; // short side
+  unit: number; // px at 1x
   rows: RowSpec[];
   tl: Timeline;
   artist: LabelClock;
@@ -234,18 +251,19 @@ const clampInt = (v: number, lo: number, hi: number) =>
   Math.max(lo, Math.min(hi, Math.round(v) || lo));
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
-/** Next multiplier: one step up or down within 1..3 (never 1 <-> 3 in one move). */
-function pickStep(current: number, r: number): number {
-  if (current <= 1) return 2;
-  if (current >= 3) return 2;
-  return r < 0.5 ? 1 : 3;
+/** One step up or down inside [lo, hi] (never two steps in one move). */
+function stepWithin(cur: number, lo: number, hi: number, r: number): number {
+  const options = [cur - 1, cur + 1].filter((v) => v >= lo && v <= hi);
+  if (!options.length) return cur;
+  return options[Math.min(options.length - 1, Math.floor(r * options.length))];
 }
 
-/** Next multiplier one step away from `cur`, avoiding `avoid` when possible. */
-function nextValue(cur: number, avoid: number, r: number): number {
-  const options = [cur - 1, cur + 1].filter((m) => m >= 1 && m <= 3);
+/** Next value one step away from `cur`, avoiding `avoid` when possible. */
+function nextValue(cur: number, avoid: number, lo: number, hi: number, r: number): number {
+  const options = [cur - 1, cur + 1].filter((m) => m >= lo && m <= hi);
   const preferred = options.filter((m) => m !== avoid);
   const pool = preferred.length ? preferred : options;
+  if (!pool.length) return cur;
   return pool[Math.min(pool.length - 1, Math.floor(r * pool.length))];
 }
 
@@ -305,8 +323,37 @@ function driftChain(
   return keys;
 }
 
+/** Seamless integer chain over [0, T] stepping +-1 inside [lo, hi], never resting. */
+function intChain(
+  T: number,
+  lo: number,
+  hi: number,
+  moveMin: number,
+  moveMax: number,
+  r: (i: number) => number,
+): Key[] {
+  const start = lo + Math.floor(r(0) * (hi - lo + 1));
+  const keys: Key[] = [{ t: 0, v: start }];
+  if (hi > lo) {
+    const times = fillSpan(0, T, moveMin, moveMax, (i) => r(1 + i));
+    let v = start;
+    times.forEach((t, i) => {
+      v = stepWithin(v, lo, hi, r(500 + i));
+      keys.push({ t, v });
+    });
+    // never rest on the loop value right before wrapping back to it
+    if (keys.length > 1 && keys[keys.length - 1].v === start) {
+      keys[keys.length - 1].v = stepWithin(start, lo, hi, r(999));
+    }
+  }
+  keys.push({ t: T, v: start });
+  return keys;
+}
+
 export function buildScene(p: Params): Scene {
   const [W, H] = FORMATS[p.format];
+  const S = Math.min(W, H);
+  const unit = S / UNITS_ACROSS;
   const nTop = clampInt(p.rowsTop, 1, 24);
   const nBot = clampInt(p.rowsBottom, 1, 24);
   const n = nTop + nBot;
@@ -331,8 +378,10 @@ export function buildScene(p: Params): Scene {
       phase: 0,
       m0: 1,
       anchor: 0,
-      holeL: 0,
-      holeR: 0,
+      remL: 0,
+      remR: 0,
+      edgeL: [],
+      edgeR: [],
       widthKeys: [],
       shiftKeys: [],
       floaters: [],
@@ -349,54 +398,47 @@ export function buildScene(p: Params): Scene {
 
   const moveMin = Math.max(0.2, Math.min(p.moveMin, p.moveMax));
   const moveMax = Math.max(moveMin, p.moveMax);
-  const travelMin = Math.max(0, Math.min(p.travelMin, p.travelMax));
-  const travelMax = Math.max(travelMin, p.travelMax);
+  const travelMax = Math.max(0, p.blockTravel) * unit;
+  const travelMin = travelMax / 4;
+  const edgeHi = clampInt(p.blockWidth, 0, 12);
+  const edgeLo = Math.max(0, edgeHi - 2);
 
-  const q = 2 * p.unit; // hole edges snap to this grid
-  // Above 90% the hole blends to the full width, so 100% shows no blocks.
-  const full = clamp01((p.holeSize - 0.9) / 0.1);
+  const open = clamp01(p.opening / 100);
+  const irr = clamp01(p.irregularity / 100);
+  // Opening shape: every row opens to the same width (minus the edge
+  // blocks), the irregularity adds whole blocks, more towards the outer
+  // rows (a hill peaking at the seam) and seeded per row and side.
+  const baseUnits = Math.round(((1 - open) * (W / 2)) / unit);
   for (const r of rows) {
     const k = r.index;
     r.delay = p.stagger * r.rank;
     r.closeDelay = span - r.delay;
-
     // Stripe phase: stratified so neighbouring rows don't form a staircase.
     r.phase = ((((k * 0.618) % 1) + rand(p.blockSeed, k, 1) * 0.6) % 1) * 2;
-    r.m0 = 1 + Math.floor(rand(p.blockSeed, k, 2) * 3);
-    if (k > 0 && r.m0 === rows[k - 1].m0 && rand(p.blockSeed, k, 4) < 0.6) {
-      r.m0 = pickStep(r.m0, rand(p.blockSeed, k, 5));
-    }
-
-    // Opening shape: a stepped hill peaking at the seam, plus seeded +-steps.
+    r.m0 = r.half === p.focus ? 3 : 1;
     const yc = (r.y0 + r.y1) / 2;
-    const env = 1 - 0.6 * (Math.abs(yc - H / 2) / (H / 2));
-    const base = Math.round(((W / 2) * Math.min(1, p.holeSize) * env) / q) * q;
-    const sides: ("holeL" | "holeR")[] = ["holeL", "holeR"];
+    const hill = Math.abs(yc - H / 2) / (H / 2);
+    const sides: ("remL" | "remR")[] = ["remL", "remR"];
     sides.forEach((side, si) => {
-      const noise = rand(p.shapeSeed, k, 10 + si) * 2 - 1;
-      const steps = Math.round(noise * p.holeVariation * 3);
-      const stepped = Math.max(0, Math.min(W / 2, base + steps * q));
-      r[side] = stepped + (W / 2 - stepped) * full;
+      const noise = rand(p.shapeSeed, k, 10 + si);
+      r[side] = baseUnits + Math.round(irr * 4 * (0.5 * hill + 0.5 * noise));
     });
   }
   // The hole never widens again as it moves away from the seam.
   for (let i = nTop - 2; i >= 0; i--) {
-    rows[i].holeL = Math.min(rows[i].holeL, rows[i + 1].holeL);
-    rows[i].holeR = Math.min(rows[i].holeR, rows[i + 1].holeR);
+    rows[i].remL = Math.max(rows[i].remL, rows[i + 1].remL);
+    rows[i].remR = Math.max(rows[i].remR, rows[i + 1].remR);
   }
   for (let i = nTop + 1; i < n; i++) {
-    rows[i].holeL = Math.min(rows[i].holeL, rows[i - 1].holeL);
-    rows[i].holeR = Math.min(rows[i].holeR, rows[i - 1].holeR);
+    rows[i].remL = Math.max(rows[i].remL, rows[i - 1].remL);
+    rows[i].remR = Math.max(rows[i].remR, rows[i - 1].remR);
   }
 
   // Block motion. The reference slit-scans show every block edge as a
-  // continuous curve: the pattern drifts sideways while its block width
+  // continuous curve: the pattern drifts sideways while its stripe width
   // changes, scaling about a point that is not the seam (so left and right
-  // move differently), and no edge ever sits still. Both quantities are
-  // keyframe chains joined by the opening easing, like easy-eased keyframes
-  // with random spacing in [moveMin, moveMax]: the width chain starts a
-  // transition with the row's opening and another with its closing (same
-  // stagger as the hole), the drift chain runs free.
+  // move differently), and no edge ever sits still. The edge blocks left
+  // standing in an open row grow and shrink on their own chain too.
   for (const r of rows) {
     const k = r.index;
     const rr = (key: number) => rand(p.blockSeed, k, key);
@@ -408,64 +450,77 @@ export function buildScene(p: Params): Scene {
     let v = r.m0;
     const openSpan = closeAt - openAt;
     let t = openAt + Math.min(moveMin + rr(100) * (moveMax - moveMin), openSpan * 0.6);
-    v = pickStep(v, rr(3));
+    v = stepWithin(v, 1, 3, rr(3));
     keys.push({ t, v });
     const times = fillSpan(t, closeAt - t, moveMin, moveMax, (i) => rr(110 + i));
     times.forEach((tk, i) => {
-      v = pickStep(v, rr(130 + i));
+      v = stepWithin(v, 1, 3, rr(130 + i));
       keys.push({ t: tk, v });
     });
     // the value reached when the closing starts is never the loop value,
     // so the closing transition is a real move
-    v = nextValue(v, r.m0, rr(150));
+    v = nextValue(v, r.m0, 1, 3, rr(150));
     keys.push({ t: closeAt, v });
+    // back to the closed width with the closing, then hold it (the drift
+    // keeps the closed card moving) until the next opening
+    keys.push({ t: Math.min(closeAt + p.duration, openAt + T), v: r.m0 });
     keys.push({ t: openAt + T, v: r.m0 });
     r.widthKeys = keys;
     r.shiftKeys = driftChain(T, moveMin, moveMax, travelMin, travelMax, rr);
+    r.edgeL = intChain(T, edgeLo, edgeHi, moveMin, moveMax, (i) => rr(7000 + i));
+    r.edgeR = intChain(T, edgeLo, edgeHi, moveMin, moveMax, (i) => rr(8000 + i));
+  }
 
-    // Floating blocks: masks inside the hole showing their own stripe
-    // pattern (changing colour like the rows), growing, shrinking to nothing
-    // and back (spawn / despawn), and drifting on their own ranges.
-    const count = clampInt(p.floatCount, 0, 8);
-    const reach = Math.min(r.holeL, r.holeR);
-    if (count > 0 && reach > p.unit) {
-      const fmin = Math.max(0.1, Math.min(p.floatMin, p.floatMax)) * p.unit;
-      const fmax = Math.max(fmin, p.floatMax * p.unit);
-      const fMoveMin = Math.max(0.2, Math.min(p.floatMoveMin, p.floatMoveMax));
-      const fMoveMax = Math.max(fMoveMin, p.floatMoveMax);
-      const fTravelMin = Math.max(0, Math.min(p.floatTravelMin, p.floatTravelMax));
-      const fTravelMax = Math.max(fTravelMin, p.floatTravelMax);
-      for (let j = 0; j < count; j++) {
-        const fr = (key: number) => rand(p.blockSeed, k, 5000 + j * 100 + key);
-        const lane = (j + 0.5) / count; // spread across the hole, then jitter
-        const x0 = -reach * 0.8 + reach * 1.6 * (lane + (fr(1) - 0.5) * 0.6);
-        const size = (i: number) => (fr(40 + i) < 0.35 ? 0 : fmin + fr(41 + i * 7) * (fmax - fmin));
-        const wk: Key[] = [{ t: 0, v: size(0) }];
-        const wtimes = fillSpan(0, T, fMoveMin, fMoveMax, (i) => fr(10 + i));
-        wtimes.forEach((tk, i) => wk.push({ t: tk, v: size(i + 1) }));
-        wk.push({ t: T, v: wk[0].v });
-        const sk: Key[] = [{ t: 0, v: 1 + Math.floor(fr(3) * 3) }];
-        let sv = sk[0].v;
-        const stimes = fillSpan(0, T, fMoveMin, fMoveMax, (i) => fr(80 + i));
-        stimes.forEach((tk, i) => {
-          sv = pickStep(sv, fr(90 + i));
-          sk.push({ t: tk, v: sv });
-        });
-        sk.push({ t: T, v: sk[0].v });
-        r.floaters.push({
-          x0,
-          phase: fr(4) * 2,
-          widthKeys: wk,
-          shiftKeys: driftChain(T, fMoveMin, fMoveMax, fTravelMin, fTravelMax, (i) => fr(60 + i)),
-          stripeKeys: sk,
-          stripeShift: driftChain(T, fMoveMin, fMoveMax, fTravelMin * 0.5, fTravelMax * 0.5, (i) => fr(70 + i)),
-        });
-      }
+  // Floating blocks: masks inside the hole showing their own stripe
+  // pattern (changing colour like the rows), growing, shrinking to nothing
+  // and back (spawn / despawn), and drifting on their own ranges. The count
+  // is spread over the rows, innermost first.
+  const count = clampInt(p.floatCount, 0, 60);
+  if (count > 0) {
+    const fmax = Math.max(0.2, p.floatSize) * unit;
+    const fmin = fmax / 2;
+    const fMoveMin = Math.max(0.2, Math.min(p.floatMoveMin, p.floatMoveMax));
+    const fMoveMax = Math.max(fMoveMin, p.floatMoveMax);
+    const fTravelMax = Math.max(0, p.floatTravel);
+    const fTravelMin = fTravelMax / 2;
+    const order = [...rows].sort((a, b) => {
+      const da = Math.abs((a.y0 + a.y1) / 2 - H / 2);
+      const db = Math.abs((b.y0 + b.y1) / 2 - H / 2);
+      return da - db || a.index - b.index;
+    });
+    const hosts = order.filter((r) => Math.min(W / 2 - r.remL * unit, W / 2 - r.remR * unit) > unit);
+    for (let j = 0; j < count && hosts.length; j++) {
+      const r = hosts[j % hosts.length];
+      const k = r.index;
+      const reach = Math.min(W / 2 - r.remL * unit, W / 2 - r.remR * unit);
+      const fr = (key: number) => rand(p.blockSeed, k, 5000 + j * 100 + key);
+      const x0 = -reach * 0.8 + reach * 1.6 * fr(1);
+      const size = (i: number) => (fr(40 + i) < 0.35 ? 0 : fmin + fr(41 + i * 7) * (fmax - fmin));
+      const wk: Key[] = [{ t: 0, v: size(0) }];
+      const wtimes = fillSpan(0, T, fMoveMin, fMoveMax, (i) => fr(10 + i));
+      wtimes.forEach((tk, i) => wk.push({ t: tk, v: size(i + 1) }));
+      wk.push({ t: T, v: wk[0].v });
+      const sk: Key[] = [{ t: 0, v: 1 + Math.floor(fr(3) * 3) }];
+      let sv = sk[0].v;
+      const stimes = fillSpan(0, T, fMoveMin, fMoveMax, (i) => fr(80 + i));
+      stimes.forEach((tk, i) => {
+        sv = stepWithin(sv, 1, 3, fr(90 + i));
+        sk.push({ t: tk, v: sv });
+      });
+      sk.push({ t: T, v: sk[0].v });
+      r.floaters.push({
+        x0,
+        phase: fr(4) * 2,
+        widthKeys: wk,
+        shiftKeys: driftChain(T, fMoveMin, fMoveMax, fTravelMin, fTravelMax, (i) => fr(60 + i)),
+        stripeKeys: sk,
+        stripeShift: driftChain(T, fMoveMin, fMoveMax, fTravelMin * 0.5, fTravelMax * 0.5, (i) => fr(70 + i)),
+      });
     }
   }
 
-  // The artist name has its own clock: it starts a beat after the bottom row
-  // and unfolds a little faster; on close it folds with that row.
+  // The artist group has its own clock: it starts a beat after the bottom
+  // row and unfolds a little faster; on close it folds with that row.
   const bottom = rows[n - 1];
   const artist: LabelClock = {
     openAt: tOpen + bottom.delay + 1.5 * p.stagger,
@@ -473,7 +528,7 @@ export function buildScene(p: Params): Scene {
     closeAt: tClose + bottom.closeDelay,
     closeD: 0.75 * p.duration,
   };
-  return { W, H, rows, tl, artist, ease: bezierEase(p.easing) };
+  return { W, H, S, unit, rows, tl, artist, ease: bezierEase(p.easing) };
 }
 
 /**
@@ -508,7 +563,7 @@ export function rowProgress(scene: Scene, p: Params, r: RowSpec, t: number): num
 }
 
 /** Evaluate a keyframe chain that covers one loop starting at keys[0].t. */
-function evalChain(scene: Scene, keys: Key[], t: number): number {
+export function evalChain(scene: Scene, keys: Key[], t: number): number {
   if (keys.length < 2) return keys[0]?.v ?? 0;
   const t0 = keys[0].t;
   const period = keys[keys.length - 1].t - t0;
@@ -524,7 +579,7 @@ function evalChain(scene: Scene, keys: Key[], t: number): number {
   return keys[keys.length - 1].v;
 }
 
-/** Block width multiplier (1..3 non-focus, fractional while moving) at time t. */
+/** Stripe width multiplier (1..3, fractional while moving) at time t. */
 export function rowMultiplier(scene: Scene, r: RowSpec, t: number): number {
   return evalChain(scene, r.widthKeys, t);
 }
@@ -534,12 +589,30 @@ export function rowShift(scene: Scene, r: RowSpec, t: number): number {
   return evalChain(scene, r.shiftKeys, t);
 }
 
+/** Half-hole extent (px at 1x) of one side when the row is fully open, at time t. */
+export function rowHole(scene: Scene, r: RowSpec, side: "L" | "R", t: number): number {
+  const rem = (side === "L" ? r.remL : r.remR) + evalChain(scene, side === "L" ? r.edgeL : r.edgeR, t);
+  return Math.max(0, scene.W / 2 - rem * scene.unit);
+}
+
 // ---------- rendering ----------
 
 export interface ImageSource {
   source: CanvasImageSource;
   width: number;
   height: number;
+}
+
+export interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** What the renderer laid out, for on-canvas interaction (at the render scale). */
+export interface Layout {
+  artistRect: Rect | null; // the artist label group while it is visible
 }
 
 /** Cover-fit placement of the background image (shared with drag-to-pan). */
@@ -580,25 +653,51 @@ function drawStripes(
   for (let k = kmin; k <= kmax; k++) {
     if ((k & 1) === 0) continue;
     const x0 = edge + (k - phase) * w;
-    const a = Math.max(from, x0);
-    const b = Math.min(to, x0 + w);
+    // whole pixels: no anti-aliased hairlines between the two colours
+    const a = Math.round(Math.max(from, x0));
+    const b = Math.round(Math.min(to, x0 + w));
     if (b > a) ctx.fillRect(a, y0, b - a, h);
   }
 }
 
-interface LabelMetrics {
-  fs: number;
-  bw: number;
-  bh: number;
-  ascent: number; // ink ascent of the measured string
-  descent: number;
-}
+// ---------- labels ----------
+// Every word is its own block. Metrics are the Figma design's, expressed as
+// fractions of the card's short side (the design is 540 wide): the text box
+// is trimmed cap height to baseline, like Figma's vertical trim, and the
+// padding sits around that.
 
 export const LABEL_WEIGHT = 700;
-export const LABEL_TRACKING = -0.02; // em, the reference's Figma -2%
+export const LABEL_TRACKING = -0.02; // em, Figma -2%
+
+interface LabelStyle {
+  fs: number;
+  padTop: number;
+  padBottom: number;
+  padX: number;
+  upper: boolean;
+}
+const D = 540;
+const STYLE_BIG: LabelStyle = { fs: 72 / D, padTop: 12 / D, padBottom: 24 / D, padX: 3 / D, upper: false };
+const STYLE_SMALL: LabelStyle = { fs: 36 / D, padTop: 18 / D, padBottom: 18 / D, padX: 3 / D, upper: true };
+const STYLE_TINY: LabelStyle = { fs: 18 / D, padTop: 18 / D, padBottom: 18 / D, padX: 3 / D, upper: false };
+const LABEL_GAP = 4.5 / D;
+
+interface Block {
+  text: string;
+  w: number;
+}
+interface LabelRow {
+  blocks: Block[];
+  fs: number;
+  padX: number;
+  padTop: number;
+  capH: number;
+  w: number;
+  h: number;
+}
 
 function labelFont(fs: number, family: string) {
-  return `${LABEL_WEIGHT} ${fs}px "${family}", "Manrope", system-ui, sans-serif`;
+  return `${LABEL_WEIGHT} ${fs}px "${family}", system-ui, sans-serif`;
 }
 
 /** Apply the label tracking where the canvas supports it (Chrome, Safari 17.4+). */
@@ -608,70 +707,78 @@ function setTracking(ctx: CanvasRenderingContext2D, fs: number) {
   }
 }
 
-/**
- * Box metrics measured on the reference: fixed padding in canvas units
- * regardless of font size, text ink centred in the box.
- */
-function measureLabel(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  fs: number,
-  family: string,
-  padX: number,
-  padY: number,
-  maxW: number,
-  capsOnly: boolean,
-): LabelMetrics {
-  const measure = (size: number) => {
-    ctx.font = labelFont(size, family);
-    setTracking(ctx, size);
-    const m = ctx.measureText(text);
-    const cap = ctx.measureText("H");
-    const ascent = capsOnly ? cap.actualBoundingBoxAscent || size * 0.7 : m.actualBoundingBoxAscent || size * 0.7;
-    const descent = capsOnly ? 0 : m.actualBoundingBoxDescent || 0;
-    return { tw: m.width, ascent, descent };
-  };
-  let r = measure(fs);
-  let bw = r.tw + 2 * padX;
-  if (bw > maxW && r.tw > 0) {
-    fs = fs * ((maxW - 2 * padX) / r.tw);
-    r = measure(fs);
-    bw = r.tw + 2 * padX;
-  }
-  return { fs, bw, bh: r.ascent + r.descent + 2 * padY, ascent: r.ascent, descent: r.descent };
+function words(text: string, upper: boolean): string[] {
+  const t = upper ? text.toUpperCase() : text;
+  return t.trim().split(/\s+/).filter(Boolean);
 }
 
-function drawLabel(
+function layoutRow(
   ctx: CanvasRenderingContext2D,
-  text: string,
-  m: LabelMetrics,
+  texts: string[],
+  style: LabelStyle,
+  S: number,
+  gap: number,
+  maxW: number,
   family: string,
+): LabelRow | null {
+  if (!texts.length) return null;
+  const padX = style.padX * S;
+  const padTop = style.padTop * S;
+  const padBottom = style.padBottom * S;
+  const measure = (fs: number) => {
+    ctx.font = labelFont(fs, family);
+    setTracking(ctx, fs);
+    const capH = ctx.measureText("H").actualBoundingBoxAscent || fs * 0.7;
+    // the canvas adds the tracking after the last glyph too; Figma does not
+    const trail = Math.abs(LABEL_TRACKING * fs);
+    const blocks = texts.map((text) => ({ text, w: ctx.measureText(text).width + trail + 2 * padX }));
+    const w = blocks.reduce((a, b) => a + b.w, 0) + gap * (blocks.length - 1);
+    return { fs, capH, blocks, w };
+  };
+  let r = measure(style.fs * S);
+  if (r.w > maxW) {
+    const fixed = 2 * padX * texts.length + gap * (texts.length - 1);
+    const text = r.w - fixed;
+    if (text > 0) r = measure(r.fs * Math.max(0.2, (maxW - fixed) / text));
+  }
+  return { blocks: r.blocks, fs: r.fs, padX, padTop, capH: r.capH, w: r.w, h: padTop + r.capH + padBottom };
+}
+
+function drawRow(
+  ctx: CanvasRenderingContext2D,
+  row: LabelRow | null,
   cx: number,
   top: number,
+  gap: number,
   windowHalf: number,
   offsetX: number,
   colors: Colors,
+  family: string,
 ) {
-  if (windowHalf < 0.5 || !text) return;
+  if (!row || windowHalf < 0.5) return;
   ctx.save();
   ctx.beginPath();
-  ctx.rect(cx - windowHalf, top, windowHalf * 2, m.bh);
+  ctx.rect(cx - windowHalf, top, windowHalf * 2, row.h);
   ctx.clip();
-  ctx.fillStyle = colors.labelBg;
-  ctx.fillRect(cx - m.bw / 2 + offsetX, top, m.bw, m.bh);
-  ctx.fillStyle = colors.labelText;
-  ctx.font = labelFont(m.fs, family);
-  setTracking(ctx, m.fs);
-  ctx.textAlign = "center";
+  ctx.font = labelFont(row.fs, family);
+  setTracking(ctx, row.fs);
+  ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
-  const inkH = m.ascent + m.descent;
-  ctx.fillText(text, cx + offsetX, top + (m.bh - inkH) / 2 + m.ascent);
+  let x = cx - row.w / 2 + offsetX;
+  for (const b of row.blocks) {
+    ctx.fillStyle = colors.labelBg;
+    ctx.fillRect(x, top, b.w, row.h);
+    ctx.fillStyle = colors.labelText;
+    ctx.fillText(b.text, x + row.padX, top + row.padTop + row.capH);
+    x += b.w + gap;
+  }
   ctx.restore();
 }
 
 /**
  * Render one frame. `scale` multiplies every pixel quantity so exports at 2x
- * are geometrically identical to the 1x preview.
+ * are geometrically identical to the 1x preview. Returns the layout of the
+ * interactive parts (the artist group) at that scale.
  */
 export function render(
   ctx: CanvasRenderingContext2D,
@@ -680,13 +787,15 @@ export function render(
   t: number,
   scale: number,
   image: ImageSource | null,
-) {
+): Layout {
   const W = scene.W * scale;
   const H = scene.H * scale;
+  const S = scene.S * scale;
+  const unit = scene.unit * scale;
   const cx = W / 2;
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.fillStyle = "#1a1a1a";
+  ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, W, H);
   if (image) {
     const c = coverRect(image, W, H, p.imageZoom, p.imageX, p.imageY);
@@ -698,9 +807,9 @@ export function render(
     const pr = rowProgress(scene, p, r, t);
     progress[r.index] = pr;
     const mult = rowMultiplier(scene, r, t);
-    const w = Math.max(1, p.unit * scale * (mult + (r.half === p.focus ? 1 : 0)));
-    const holeL = r.holeL * scale * pr;
-    const holeR = r.holeR * scale * pr;
+    const w = Math.max(1, unit * mult);
+    const holeL = rowHole(scene, r, "L", t) * scale * pr;
+    const holeR = rowHole(scene, r, "R", t) * scale * pr;
     const origin = (r.anchor + rowShift(scene, r, t)) * scale;
     const y0 = Math.round(r.y0 * scale);
     const y1 = Math.round(r.y1 * scale);
@@ -722,7 +831,7 @@ export function render(
         if (fw < 1) continue;
         const fx = cx + (f.x0 + evalChain(scene, f.shiftKeys, t)) * scale;
         const sm = evalChain(scene, f.stripeKeys, t);
-        const sw = Math.max(1, p.unit * scale * (sm + (r.half === p.focus ? 1 : 0)));
+        const sw = Math.max(1, unit * sm);
         const so = fx + evalChain(scene, f.stripeShift, t) * scale;
         const a = Math.max(left, fx - fw / 2);
         const b = Math.min(right, fx + fw / 2);
@@ -732,58 +841,51 @@ export function render(
     }
   }
 
-  // Labels. Stage + date live on the closed card and fold into the seam as
-  // its rows open (gone by ~30% of their progress, sliding sideways on the
-  // way); the artist name unfolds along the bottom on its own clock.
-  const S = Math.min(W, H);
+  // Labels. Stage + day sit on the seam of the closed card and fold into it
+  // as its rows open (gone by ~30% of their progress, sliding sideways on
+  // the way); the artist group (times, name, stage) unfolds on its own clock
+  // at the height set by dragging it on the preview.
   const nTop = scene.rows.filter((r) => r.half === "top").length;
   const pSeamTop = progress[nTop - 1] ?? 0;
   const pSeamBot = progress[nTop] ?? pSeamTop;
   const fam = p.fontFamily || "Avantt";
+  const gap = LABEL_GAP * S;
+  const maxW = W * 0.92;
   const foldOut = (pr: number) => Math.min(1, pr / 0.3);
   const slide = 0.11 * S;
 
-  const padY = 0.043 * S;
-  const stage = measureLabel(ctx, p.stage, 0.089 * S, fam, 0.0095 * S, padY, W * 0.92, true);
-  const stageTop = H / 2 + 0.046 * S - stage.bh;
-  drawLabel(
-    ctx,
-    p.stage,
-    stage,
-    fam,
-    cx,
-    stageTop,
-    (stage.bw / 2) * (1 - foldOut(pSeamTop)),
-    -slide * foldOut(pSeamTop),
-    p.colors,
-  );
-  const date = measureLabel(ctx, p.date, 0.046 * S, fam, 0.013 * S, padY, W * 0.92, true);
-  const dateTop = stageTop + stage.bh + 0.021 * S;
-  drawLabel(
-    ctx,
-    p.date,
-    date,
-    fam,
-    cx,
-    dateTop,
-    (date.bw / 2) * (1 - foldOut(pSeamBot)),
-    slide * foldOut(pSeamBot),
-    p.colors,
-  );
+  const seamStage = layoutRow(ctx, words(p.stage, false), STYLE_BIG, S, gap, maxW, fam);
+  const seamDay = layoutRow(ctx, words(p.day, true), STYLE_SMALL, S, gap, maxW, fam);
+  const seamH = (seamStage?.h ?? 0) + (seamStage && seamDay ? gap : 0) + (seamDay?.h ?? 0);
+  let y = H / 2 - seamH / 2;
+  if (seamStage) {
+    const f = foldOut(pSeamTop);
+    drawRow(ctx, seamStage, cx, y, gap, (seamStage.w / 2) * (1 - f), -slide * f, p.colors, fam);
+    y += seamStage.h + gap;
+  }
+  if (seamDay) {
+    const f = foldOut(pSeamBot);
+    drawRow(ctx, seamDay, cx, y, gap, (seamDay.w / 2) * (1 - f), slide * f, p.colors, fam);
+  }
 
   const ac = scene.artist;
   const pa = segmentProgress(scene, t, ac.openAt, ac.openD, ac.closeAt, ac.closeD);
-  const artist = measureLabel(ctx, p.artist, 0.145 * S, fam, 0.0097 * S, 0.0213 * S, W * 0.92, false);
-  drawLabel(
-    ctx,
-    p.artist,
-    artist,
-    fam,
-    cx,
-    H - 0.06 * S - artist.bh,
-    (artist.bw / 2) * pa,
-    -0.12 * S * (1 - pa),
-    p.colors,
-  );
+  const times = layoutRow(ctx, [p.timeStart, p.timeEnd].map((s) => s.trim()).filter(Boolean), STYLE_TINY, S, gap, maxW, fam);
+  const name = layoutRow(ctx, words(p.artist, false), STYLE_BIG, S, gap, maxW, fam);
+  const stage2 = layoutRow(ctx, words(p.stage, true), STYLE_SMALL, S, gap, maxW, fam);
+  const groupRows = [times, name, stage2].filter((r): r is LabelRow => !!r);
+  let artistRect: Rect | null = null;
+  if (groupRows.length) {
+    const gh = groupRows.reduce((a, r) => a + r.h, 0) + gap * (groupRows.length - 1);
+    const gw = groupRows.reduce((a, r) => Math.max(a, r.w), 0);
+    const top = Math.max(0, Math.min(H - gh, clamp01(p.labelY) * H));
+    let yy = top;
+    for (const r of groupRows) {
+      drawRow(ctx, r, cx, yy, gap, (r.w / 2) * pa, -0.12 * S * (1 - pa), p.colors, fam);
+      yy += r.h + gap;
+    }
+    if (pa > 0.5) artistRect = { x: cx - gw / 2, y: top, w: gw, h: gh };
+  }
   ctx.restore();
+  return { artistRect };
 }
