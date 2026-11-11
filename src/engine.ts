@@ -426,10 +426,14 @@ export function buildScene(p: Params): Scene {
   };
   const artistGone = artist.closeAt + groupSpan(artistBlocks);
   const seamDelay = Math.min(p.stagger * rows[nTop - 1].rank, p.stagger * (rows[nTop]?.rank ?? Infinity));
+  // the seam blocks must be gone before the artist group starts: fold out
+  // faster (same proportions) when the full length would not fit
+  const seamOpenAt = tOpen + seamDelay;
+  const kOpen = Math.min(1, Math.max(0.1, artist.openAt - seamOpenAt - 0.05) / groupSpan(seamBlocks));
   const seam: LabelClock = {
-    openAt: tOpen + seamDelay,
-    openD: labelD,
-    openStagger: labelStagger,
+    openAt: seamOpenAt,
+    openD: labelD * kOpen,
+    openStagger: labelStagger * kOpen,
     closeAt: Math.max(tCloseEnd, artistGone + 0.05),
     closeD: labelD,
     closeStagger: labelStagger,
