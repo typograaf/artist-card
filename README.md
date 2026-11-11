@@ -27,14 +27,17 @@ npm run build    # dist/
 - **Rows** top / bottom counts. **Thick blocks** picks the half whose blocks
   are one unit thicker (2/3/4 units instead of 1/2/3, as measured in the
   reference).
-- **Blocks** unit size, extra block moves, block move length, seed. Each
-  row's block width is 1, 2 or 3 units and glides between neighbouring
-  values (a horizontal scale about the seam) in transitions of "Block move
-  length" (3 s like the reference) using the opening easing: one starts with
-  the row's opening, extra ones fill the open hold ("Extra block moves"),
-  and one starts with the closing and may run on across the loop point, so
-  the rows are in motion about half the time, as in the video. Transitions
-  never overlap and the loop is seamless.
+- **Blocks** unit size, block motion, block move length, seed. Each row's
+  pattern is never still: its block width glides between 1, 2 and 3 units
+  (one unit more on the thick half) and the whole pattern drifts sideways,
+  both as chains of easy-eased keyframes spaced about "Block move length"
+  apart and joined by the opening easing. The width chain starts a
+  transition with the row's opening and another with its closing (same
+  stagger as the hole, running on across the loop point); the drift chain
+  runs free and seamless. The pattern scales about a seeded point away from
+  the seam, so the left and right halves move differently, as in the video.
+  "Block motion" sets the drift amplitude and keyframe density; 0 freezes
+  the holds.
 - **Opening** duration, stagger per row, stagger order (closing runs in the
   reverse order, outer rows first, like the reference), easing (presets or a
   custom cubic-bezier; the same curve drives the block moves).
@@ -45,5 +48,5 @@ npm run build    # dist/
 - **Settings** copy / paste the whole state as JSON (values are clamped).
 
 The default easing `cubic-bezier(0.70, 0.10, 0.10, 0.90)` over 1.6 s, the
-0.15 s stagger, the 3 s block transitions, the label boxes and their fold
+0.15 s stagger, the ~2.6 s block keyframes, the label boxes and their fold
 timings were all measured from the reference video.
