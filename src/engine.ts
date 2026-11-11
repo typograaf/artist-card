@@ -232,8 +232,10 @@ export interface Timeline {
 export interface LabelClock {
   openAt: number;
   openD: number;
+  openStagger: number; // s between blocks on the way in
   closeAt: number;
   closeD: number;
+  closeStagger: number; // s between blocks on the way out (compressed to fit)
 }
 
 export interface Scene {
@@ -520,15 +522,38 @@ export function buildScene(p: Params): Scene {
   }
 
   // The artist group has its own clock: it starts a beat after the bottom
-  // row and unfolds a little faster; on close it folds with that row.
+  // row and unfolds a little faster, one block after another. On close it
+  // starts with the closing and must be gone before the seam labels come
+  // back (they fold in once the seam rows are 70% closed), so its stagger
+  // and duration are compressed to fit that window when needed.
+  const ease = bezierEase(p.easing);
   const bottom = rows[n - 1];
+  const seamDelay = Math.max(rows[nTop - 1].closeDelay, rows[nTop]?.closeDelay ?? 0);
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (ease(mid) < 0.7) lo = mid;
+    else hi = mid;
+  }
+  const seamLabelsBack = tClose + seamDelay + p.duration * lo;
+  const nBlocks =
+    [p.timeStart, p.timeEnd].filter((t) => t.trim()).length +
+    p.artist.trim().split(/\s+/).filter(Boolean).length +
+    p.stage.trim().split(/\s+/).filter(Boolean).length;
+  const closeStart = tClose + bottom.closeDelay;
+  const need = Math.max(1, nBlocks - 1) * p.stagger + 0.75 * p.duration;
+  const available = Math.max(0.1, seamLabelsBack - closeStart - 0.05);
+  const k = Math.min(1, available / need);
   const artist: LabelClock = {
     openAt: tOpen + bottom.delay + 1.5 * p.stagger,
     openD: 0.8 * p.duration,
-    closeAt: tClose + bottom.closeDelay,
-    closeD: 0.75 * p.duration,
+    openStagger: p.stagger,
+    closeAt: closeStart,
+    closeD: 0.75 * p.duration * k,
+    closeStagger: p.stagger * k,
   };
-  return { W, H, S, unit, rows, tl, artist, ease: bezierEase(p.easing) };
+  return { W, H, S, unit, rows, tl, artist, ease };
 }
 
 /**
@@ -867,14 +892,14 @@ export function render(
   // as its rows open (gone by ~30% of their progress); the artist group
   // (times, name, stage) unfolds on its own clock at the height set by
   // dragging it on the preview. Blocks come in one after another (one
-  // row stagger apart) and leave in reverse order; rows stay centred.
+  // row stagger apart) and leave in reverse order, faster if the seam
+  // labels would otherwise return on top of them; rows stay centred.
   const nTop = scene.rows.filter((r) => r.half === "top").length;
   const pSeamTop = progress[nTop - 1] ?? 0;
   const pSeamBot = progress[nTop] ?? pSeamTop;
   const fam = p.fontFamily || "Avantt";
   const gap = LABEL_GAP * S;
   const maxW = W * 0.92;
-  const blockStagger = p.stagger;
   const slide = 0.12 * S;
   // which side each word slides in from: seeded, so neighbours differ
   const seamDir = (base: number) => (i: number) => (rand(p.blockSeed, 900 + base + i) < 0.5 ? -1 : 1);
@@ -919,9 +944,9 @@ export function render(
           const pr = segmentProgress(
             scene,
             t,
-            ac.openAt + g * blockStagger,
+            ac.openAt + g * ac.openStagger,
             ac.openD,
-            ac.closeAt + (nBlocks - 1 - g) * blockStagger,
+            ac.closeAt + (nBlocks - 1 - g) * ac.closeStagger,
             ac.closeD,
           );
           anyOpen = Math.max(anyOpen, pr);
