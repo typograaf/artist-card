@@ -745,9 +745,10 @@ function layoutRow(
 }
 
 /**
- * Draw one row of blocks at reveal fraction `reveal` (0..1). Every block is
- * masked on its own, growing from its own centre, and the blocks are laid out
- * with the fixed gap at every moment, so the gap never scales with them.
+ * Draw one row of blocks; `reveal(i)` is block i's own 0..1. Every block is
+ * masked on its own, growing from its own centre, and the row is laid out
+ * from the blocks' current widths with the fixed gap and centred on `cx`
+ * at every moment.
  */
 function drawRow(
   ctx: CanvasRenderingContext2D,
@@ -755,22 +756,22 @@ function drawRow(
   cx: number,
   top: number,
   gap: number,
-  reveal: number,
-  offsetX: number,
+  reveal: (i: number) => number,
   colors: Colors,
   family: string,
 ) {
-  if (!row || reveal <= 0.001) return;
-  const r = Math.min(1, reveal);
-  const rowW = row.blocks.reduce((a, b) => a + b.w * r, 0) + gap * (row.blocks.length - 1);
+  if (!row) return;
+  const vis = row.blocks.map((b, i) => b.w * clamp01(reveal(i)));
+  if (!vis.some((v) => v >= 0.5)) return;
+  const rowW = vis.reduce((a, v) => a + v, 0) + gap * (row.blocks.length - 1);
   ctx.save();
   ctx.font = labelFont(row.fs, family);
   setTracking(ctx, row.fs);
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
-  let x = cx - rowW / 2 + offsetX;
-  for (const b of row.blocks) {
-    const vw = b.w * r;
+  let x = cx - rowW / 2;
+  row.blocks.forEach((b, i) => {
+    const vw = vis[i];
     if (vw >= 0.5) {
       ctx.save();
       ctx.beginPath();
@@ -784,7 +785,7 @@ function drawRow(
       ctx.restore();
     }
     x += vw + gap;
-  }
+  });
   ctx.restore();
 }
 
@@ -855,34 +856,32 @@ export function render(
   }
 
   // Labels. Stage + day sit on the seam of the closed card and fold into it
-  // as its rows open (gone by ~30% of their progress, sliding sideways on
-  // the way); the artist group (times, name, stage) unfolds on its own clock
-  // at the height set by dragging it on the preview.
+  // as its rows open (gone by ~30% of their progress); the artist group
+  // (times, name, stage) unfolds on its own clock at the height set by
+  // dragging it on the preview. Blocks come in one after another (half a
+  // row stagger apart) and leave in reverse order; rows stay centred.
   const nTop = scene.rows.filter((r) => r.half === "top").length;
   const pSeamTop = progress[nTop - 1] ?? 0;
   const pSeamBot = progress[nTop] ?? pSeamTop;
   const fam = p.fontFamily || "Avantt";
   const gap = LABEL_GAP * S;
   const maxW = W * 0.92;
-  const foldOut = (pr: number) => Math.min(1, pr / 0.3);
-  const slide = 0.11 * S;
+  const blockStagger = 0.5 * p.stagger;
+  // seam blocks: block i folds out between 30% progress, starting 6% later
+  // per block (so on close the last one out is the first one back)
+  const seamReveal = (pr: number) => (i: number) => 1 - clamp01((pr - 0.06 * i) / 0.3);
 
   const seamStage = layoutRow(ctx, words(p.stage, false), STYLE_BIG, S, gap, maxW, fam);
   const seamDay = layoutRow(ctx, words(p.day, true), STYLE_SMALL, S, gap, maxW, fam);
   const seamH = (seamStage?.h ?? 0) + (seamStage && seamDay ? gap : 0) + (seamDay?.h ?? 0);
   let y = H / 2 - seamH / 2;
   if (seamStage) {
-    const f = foldOut(pSeamTop);
-    drawRow(ctx, seamStage, cx, y, gap, 1 - f, -slide * f, p.colors, fam);
+    drawRow(ctx, seamStage, cx, y, gap, seamReveal(pSeamTop), p.colors, fam);
     y += seamStage.h + gap;
   }
-  if (seamDay) {
-    const f = foldOut(pSeamBot);
-    drawRow(ctx, seamDay, cx, y, gap, 1 - f, slide * f, p.colors, fam);
-  }
+  if (seamDay) drawRow(ctx, seamDay, cx, y, gap, seamReveal(pSeamBot), p.colors, fam);
 
   const ac = scene.artist;
-  const pa = segmentProgress(scene, t, ac.openAt, ac.openD, ac.closeAt, ac.closeD);
   const times = layoutRow(ctx, [p.timeStart, p.timeEnd].map((s) => s.trim()).filter(Boolean), STYLE_TINY, S, gap, maxW, fam);
   const name = layoutRow(ctx, words(p.artist, false), STYLE_BIG, S, gap, maxW, fam);
   const stage2 = layoutRow(ctx, words(p.stage, true), STYLE_SMALL, S, gap, maxW, fam);
@@ -892,12 +891,38 @@ export function render(
     const gh = groupRows.reduce((a, r) => a + r.h, 0) + gap * (groupRows.length - 1);
     const gw = groupRows.reduce((a, r) => Math.max(a, r.w), 0);
     const top = Math.max(0, Math.min(H - gh, clamp01(p.labelY) * H));
+    const nBlocks = groupRows.reduce((a, r) => a + r.blocks.length, 0);
+    let first = 0; // global block index of the row's first block
     let yy = top;
+    let anyOpen = 0;
     for (const r of groupRows) {
-      drawRow(ctx, r, cx, yy, gap, pa, -0.12 * S * (1 - pa), p.colors, fam);
+      const base = first;
+      drawRow(
+        ctx,
+        r,
+        cx,
+        yy,
+        gap,
+        (i) => {
+          const g = base + i;
+          const pr = segmentProgress(
+            scene,
+            t,
+            ac.openAt + g * blockStagger,
+            ac.openD,
+            ac.closeAt + (nBlocks - 1 - g) * blockStagger,
+            ac.closeD,
+          );
+          anyOpen = Math.max(anyOpen, pr);
+          return pr;
+        },
+        p.colors,
+        fam,
+      );
+      first += r.blocks.length;
       yy += r.h + gap;
     }
-    if (pa > 0.5) artistRect = { x: cx - gw / 2, y: top, w: gw, h: gh };
+    if (anyOpen > 0.5) artistRect = { x: cx - gw / 2, y: top, w: gw, h: gh };
   }
   ctx.restore();
   return { artistRect };
