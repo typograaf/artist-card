@@ -35,8 +35,8 @@ Left column:
   on the preview, paste one, or click an empty card).
 - **Hold closed, Opening time, Opening %, Hold open** the loop is closed
   hold, open, open hold, close, then the seam labels fold back in (every
-  label block opens and closes over 0.8 x the opening time, one row stagger
-  apart, on a soft easing). Opening % is how far the rows slide apart;
+  label block opens and closes in 1 s, one row stagger apart, on a soft
+  easing). Opening % is how far the rows slide apart;
   the edge blocks stay on top of that.
 - **Rows top / bottom** row counts.
 - **Rows stagger** seconds between rows; **Irregularity %** extra blocks

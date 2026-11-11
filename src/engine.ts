@@ -66,6 +66,8 @@ export interface Params {
 export const DEFAULT_EASING: Bezier = [0.7, 0.1, 0.1, 0.9];
 /** The label blocks open and close on a softer curve than the rows. */
 export const LABEL_EASING: Bezier = [0.45, 0.05, 0.2, 1];
+/** Seconds one label block takes to open or close. */
+export const LABEL_DURATION = 1;
 
 export const DEFAULT_PARAMS: Params = {
   format: "4:5",
@@ -415,11 +417,11 @@ export function buildScene(p: Params): Scene {
   const artistBlocks = [p.timeStart, p.timeEnd].filter((t) => t.trim()).length + wordsOf(p.artist) + wordsOf(p.stage);
   const seamDelay = Math.min(p.stagger * rows[nTop - 1].rank, p.stagger * (rows[nTop]?.rank ?? Infinity));
   const seamOpenAt = tOpen + seamDelay;
-  // One pace for every label move: block length 0.8 x the opening time and
-  // one row stagger between blocks. Nothing speeds up to avoid overlap:
+  // One pace for every label move: 1 s per block and one row stagger
+  // between blocks. Nothing speeds up to avoid overlap:
   // the artist group waits until the seam blocks are gone, and the seam
   // blocks come back once the artist group is gone.
-  const labelD = 0.8 * p.duration;
+  const labelD = LABEL_DURATION;
   const labelStagger = p.stagger;
   const groupSpan = (blocks: number) => (Math.max(1, blocks) - 1) * labelStagger + labelD;
   const artistOpenAt = Math.max(tOpen + bottomDelay + 1.5 * p.stagger, seamOpenAt + groupSpan(seamBlocks) + 0.05);
