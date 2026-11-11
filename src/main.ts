@@ -52,11 +52,69 @@ function draw() {
   layout = render(ctx, params, scene, time, 1, image);
 }
 function schedule() {
+  syncHash();
   if (raf || playing) return;
   raf = requestAnimationFrame(() => {
     raf = 0;
     draw();
   });
+}
+
+// ---------- settings in the URL ----------
+// Every value that differs from the defaults lives in the hash, so the link
+// itself carries the settings (the photo excepted).
+
+type Flat = Record<string, string | number | boolean>;
+function flatten(obj: object, prefix = ""): Flat {
+  const out: Flat = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v && typeof v === "object" && !Array.isArray(v)) Object.assign(out, flatten(v, `${prefix}${k}.`));
+    else if (Array.isArray(v)) out[`${prefix}${k}`] = v.join(",");
+    else out[`${prefix}${k}`] = v as string | number | boolean;
+  }
+  return out;
+}
+function serializeHash(): string {
+  const cur = flatten(params);
+  const def = flatten(DEFAULT_PARAMS);
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(cur)) {
+    if (String(v) === String(def[k])) continue;
+    q.set(k, typeof v === "number" ? String(Math.round(v * 10000) / 10000) : String(v));
+  }
+  return q.toString();
+}
+let hashTimer = 0;
+let lastHash = "";
+function syncHash() {
+  if (hashTimer) return;
+  hashTimer = window.setTimeout(() => {
+    hashTimer = 0;
+    const h = serializeHash();
+    if (h === lastHash) return;
+    lastHash = h;
+    history.replaceState(null, "", h ? `#${h}` : location.pathname + location.search);
+  }, 150);
+}
+function readHash(): boolean {
+  const h = location.hash.replace(/^#/, "");
+  if (!h) return false;
+  const q = new URLSearchParams(h);
+  const obj: Record<string, unknown> = {};
+  const def = flatten(DEFAULT_PARAMS);
+  for (const [k, v] of q.entries()) {
+    if (!(k in def)) continue;
+    const value: unknown = typeof def[k] === "number" ? parseFloat(v) : k === "easing" ? v.split(",").map(Number) : v;
+    const path = k.split(".");
+    let host = obj;
+    for (const part of path.slice(0, -1)) {
+      host[part] = (host[part] as Record<string, unknown>) ?? {};
+      host = host[part] as Record<string, unknown>;
+    }
+    host[path[path.length - 1]] = value;
+  }
+  lastHash = h;
+  return applySettings(JSON.stringify(obj));
 }
 function rebuild() {
   scene = buildScene(params);
@@ -669,6 +727,14 @@ function applySettings(str: string): boolean {
     params.imageZoom = clamp(obj.imageZoom, 1, 6);
     applied++;
   }
+  if (
+    Array.isArray(obj.easing) &&
+    obj.easing.length === 4 &&
+    obj.easing.every((x) => typeof x === "number" && Number.isFinite(x))
+  ) {
+    params.easing = (obj.easing as number[]).map((x) => clamp(x, 0, 1)) as [number, number, number, number];
+    applied++;
+  }
   if (typeof obj.labelY === "number" && Number.isFinite(obj.labelY)) {
     params.labelY = clamp(obj.labelY, 0, 1);
     applied++;
@@ -833,6 +899,9 @@ applyFormat();
 setImage(null);
 loadDefaultImage();
 syncUI();
-rebuild();
+if (!readHash()) rebuild();
+window.addEventListener("hashchange", () => {
+  if (location.hash.replace(/^#/, "") !== lastHash) readHash();
+});
 document.fonts.load('700 100px "Avantt"').catch(() => undefined);
 document.fonts.ready.then(() => schedule());

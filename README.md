@@ -55,6 +55,8 @@ Right column:
   Cmd+V to paste a hex (with or without #), `?` picks one of the thirteen
   Touquet pairs.
 - **Copy / Paste settings** the whole state as JSON (values are clamped).
+  The URL hash always carries every setting that differs from the defaults
+  (photo excepted), so the link itself restores the state.
 - **Export MP4 / PNG**.
 
 Preview:
