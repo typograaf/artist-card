@@ -399,7 +399,43 @@ export function buildScene(p: Params): Scene {
   const tOpenEnd = tOpen + p.duration + span;
   const tClose = tOpenEnd + p.holdOpen;
   const tCloseEnd = tClose + p.duration + span;
-  const tl: Timeline = { tOpen, tOpenEnd, tClose, tCloseEnd, total: tCloseEnd, span };
+  // Label clocks, all on the soft label easing with one block length and
+  // one block stagger (the artist group's opening is the model for every
+  // label move). Seam blocks (stage + day) fold out one after another as
+  // the rows start opening and fold back in, in reverse order, once the
+  // rows are closed and the artist group is gone; the loop ends when the
+  // last seam block has landed. The artist group starts a beat after the
+  // bottom row and closes with it.
+  const ease = bezierEase(p.easing);
+  const wordsOf = (t: string) => t.trim().split(/\s+/).filter(Boolean).length;
+  const labelD = 0.8 * p.duration;
+  const labelStagger = p.stagger;
+  const groupSpan = (blocks: number) => (Math.max(1, blocks) - 1) * labelStagger + labelD;
+  const bottomRow = rows[n - 1];
+  const bottomDelay = p.stagger * bottomRow.rank;
+  const bottomCloseDelay = span - bottomDelay;
+  const seamBlocks = wordsOf(p.stage) + wordsOf(p.day);
+  const artistBlocks = [p.timeStart, p.timeEnd].filter((t) => t.trim()).length + wordsOf(p.artist) + wordsOf(p.stage);
+  const artist: LabelClock = {
+    openAt: tOpen + bottomDelay + 1.5 * p.stagger,
+    openD: labelD,
+    openStagger: labelStagger,
+    closeAt: tClose + bottomCloseDelay,
+    closeD: labelD,
+    closeStagger: labelStagger,
+  };
+  const artistGone = artist.closeAt + groupSpan(artistBlocks);
+  const seamDelay = Math.min(p.stagger * rows[nTop - 1].rank, p.stagger * (rows[nTop]?.rank ?? Infinity));
+  const seam: LabelClock = {
+    openAt: tOpen + seamDelay,
+    openD: labelD,
+    openStagger: labelStagger,
+    closeAt: Math.max(tCloseEnd, artistGone + 0.05),
+    closeD: labelD,
+    closeStagger: labelStagger,
+  };
+  const total = seam.closeAt + groupSpan(seamBlocks);
+  const tl: Timeline = { tOpen, tOpenEnd, tClose, tCloseEnd, total, span };
   const T = tl.total;
 
   const moveMin = Math.max(0.2, Math.min(p.moveMin, p.moveMax));
@@ -525,43 +561,6 @@ export function buildScene(p: Params): Scene {
     }
   }
 
-  // Label clocks, on the soft label easing. Seam blocks (stage + day) fold
-  // out one after another as the seam rows start opening and fold back in,
-  // in reverse order, so that the last one lands exactly on the loop point.
-  // The artist group starts a beat after the bottom row and unfolds block
-  // by block; on close it starts with the closing and must be gone before
-  // the seam blocks come back, so its stagger and duration are compressed
-  // to fit that window when needed.
-  const ease = bezierEase(p.easing);
-  const wordsOf = (t: string) => t.trim().split(/\s+/).filter(Boolean).length;
-  const bottom = rows[n - 1];
-  const seamBlocks = Math.max(1, wordsOf(p.stage) + wordsOf(p.day));
-  const seamStagger = 0.5 * p.stagger;
-  const seamD = 0.5 * p.duration;
-  const seam: LabelClock = {
-    openAt: tOpen + Math.min(rows[nTop - 1].delay, rows[nTop]?.delay ?? Infinity),
-    openD: seamD,
-    openStagger: seamStagger,
-    closeAt: tCloseEnd - seamD - (seamBlocks - 1) * seamStagger,
-    closeD: seamD,
-    closeStagger: seamStagger,
-  };
-  const artistBlocks = Math.max(
-    1,
-    [p.timeStart, p.timeEnd].filter((t) => t.trim()).length + wordsOf(p.artist) + wordsOf(p.stage),
-  );
-  const closeStart = tClose + bottom.closeDelay;
-  const need = (artistBlocks - 1) * p.stagger + 0.75 * p.duration;
-  const available = Math.max(0.1, seam.closeAt - closeStart - 0.05);
-  const k = Math.min(1, available / need);
-  const artist: LabelClock = {
-    openAt: tOpen + bottom.delay + 1.5 * p.stagger,
-    openD: 0.8 * p.duration,
-    openStagger: p.stagger,
-    closeAt: closeStart,
-    closeD: 0.75 * p.duration * k,
-    closeStagger: p.stagger * k,
-  };
   return { W, H, S, unit, rows, tl, seam, artist, ease, labelEase: bezierEase(LABEL_EASING) };
 }
 
