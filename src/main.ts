@@ -818,8 +818,20 @@ window.artistCard = {
 
 // ---------- init ----------
 
+/** The bundled default photo; a loaded, pasted or dropped image replaces it. */
+function loadDefaultImage() {
+  const gen = ++loadGen;
+  const img = new Image();
+  img.onload = () => {
+    if (gen !== loadGen) return;
+    setImage({ source: img, width: img.naturalWidth, height: img.naturalHeight });
+  };
+  img.src = `${import.meta.env.BASE_URL}default.jpg`;
+}
+
 applyFormat();
 setImage(null);
+loadDefaultImage();
 syncUI();
 rebuild();
 document.fonts.load('700 100px "Avantt"').catch(() => undefined);

@@ -20,7 +20,9 @@ npm run build    # dist/
 ```
 
 Avantt Bold and SemiBold are expected in `public/fonts/` (licensed, not in
-the repo).
+the repo). `npm run deploy` builds and pushes `dist/` to the `gh-pages`
+branch, which GitHub Pages serves at https://typograaf.github.io/artist-card/.
+The bundled default photo is `public/default.jpg`.
 
 ## Controls
 
