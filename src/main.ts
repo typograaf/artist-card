@@ -18,9 +18,9 @@ import {
 } from "./engine";
 import { exportMp4, exportPng, supportsVideoExport } from "./export";
 
-const FPS = 30; // frame counter, arrow-key stepping and MP4 export
+const FPS = 60; // frame counter, arrow-key stepping and MP4 export
 const TICKS_PER_SECOND = 15; // timeline tick pitch
-const EXPORT_SCALE = 1; // 1080 wide, the reference's size
+const EXPORT_SCALE = 2; // 2160 wide
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 

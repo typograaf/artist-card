@@ -53,14 +53,23 @@ export async function exportPng(
   if (blob) downloadBlob(blob, `${fileStem(p, scale)}-${t.toFixed(2)}s.png`);
 }
 
-function pickH264Codec(w: number, h: number): string {
-  const px = w * h;
-  if (px <= 1280 * 720) return "avc1.64001F";
-  if (px <= 1920 * 1088) return "avc1.640028";
-  if (px <= 2560 * 1440) return "avc1.640032";
-  if (px <= 3840 * 2160) return "avc1.640033";
-  if (px <= 4096 * 2160) return "avc1.640034";
-  return "avc1.640040";
+/** Lowest H.264 High-profile level whose frame-size and throughput limits fit. */
+function pickH264Codec(w: number, h: number, fps: number): string {
+  const mbs = Math.ceil(w / 16) * Math.ceil(h / 16);
+  const mbps = mbs * fps;
+  const levels: [string, number, number][] = [
+    ["1F", 8192, 108000], // 3.1
+    ["28", 8192, 245760], // 4.0
+    ["2A", 8704, 522240], // 4.2
+    ["32", 22080, 589824], // 5.0
+    ["33", 36864, 983040], // 5.1
+    ["34", 36864, 2073600], // 5.2
+    ["3C", 139264, 4177920], // 6.0
+    ["3D", 139264, 8355840], // 6.1
+    ["3E", 139264, 16711680], // 6.2
+  ];
+  const level = levels.find(([, maxMbs, maxMbps]) => mbs <= maxMbs && mbps <= maxMbps)?.[0] ?? "3E";
+  return `avc1.6400${level}`;
 }
 
 export function supportsVideoExport(): boolean {
@@ -82,8 +91,9 @@ const isWebKit = () => {
  * through the list when an attempt stalls.
  */
 function encoderConfigs(outW: number, outH: number, fps: number): VideoEncoderConfig[] {
-  const codec = pickH264Codec(outW, outH);
-  const bitrate = Math.min(100_000_000, Math.round(outW * outH * fps * 0.25));
+  const codec = pickH264Codec(outW, outH, fps);
+  // generous: flat colour fields band at low rates
+  const bitrate = Math.min(240_000_000, Math.round(outW * outH * fps * 0.4));
   const base = { width: outW, height: outH, framerate: fps, bitrate };
   const quality: VideoEncoderConfig = { ...base, codec, bitrateMode: "variable", avc: { format: "avc" } };
   const realtime: VideoEncoderConfig = { ...base, codec, latencyMode: "realtime", avc: { format: "avc" } };

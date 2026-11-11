@@ -4,7 +4,7 @@ Row-reveal artist card generator. Two halves of horizontal rows, each a strip
 of two-colour stripes, split at the centre seam and slide open to reveal a
 photo. The stage name and day sit on the closed card; the times, artist name
 and stage unfold as word blocks once the card is open. Exports PNG stills and
-one-loop H.264 MP4s (1080 wide, 30 fps).
+one-loop H.264 MP4s (2x: 2160 wide, 60 fps, ~0.4 bit per pixel per frame).
 
 The UI and the card follow the Figma design in Touquet-2027 (frames 229:94,
 232:1464); the label blocks reproduce its metrics exactly (Avantt Bold, -2%
