@@ -757,6 +757,8 @@ function drawRow(
   top: number,
   gap: number,
   reveal: (i: number) => number,
+  dir: (i: number) => number, // -1 or 1: the side each word slides in from
+  slide: number, // px, how far a word travels inside its mask
   colors: Colors,
   family: string,
 ) {
@@ -775,9 +777,15 @@ function drawRow(
     if (vw >= 0.5) {
       ctx.save();
       ctx.beginPath();
-      ctx.rect(x, top, vw, row.h);
+      // the mask only limits the width; overshoots and descenders hang out
+      // of the block top and bottom, as in the design
+      ctx.rect(x, top - row.fs, vw, row.h + 2 * row.fs);
       ctx.clip();
-      const bx = x + vw / 2 - b.w / 2; // full block centred in its mask
+      // the full block slides in from its side, never leaving the mask
+      // uncovered: the offset is capped at the hidden half-width
+      const r = clamp01(reveal(i));
+      const off = Math.min(slide * (1 - r), (b.w - vw) / 2) * (dir(i) < 0 ? -1 : 1);
+      const bx = x + vw / 2 - b.w / 2 + off;
       ctx.fillStyle = colors.labelBg;
       ctx.fillRect(bx, top, b.w, row.h);
       ctx.fillStyle = colors.labelText;
@@ -858,7 +866,7 @@ export function render(
   // Labels. Stage + day sit on the seam of the closed card and fold into it
   // as its rows open (gone by ~30% of their progress); the artist group
   // (times, name, stage) unfolds on its own clock at the height set by
-  // dragging it on the preview. Blocks come in one after another (half a
+  // dragging it on the preview. Blocks come in one after another (one
   // row stagger apart) and leave in reverse order; rows stay centred.
   const nTop = scene.rows.filter((r) => r.half === "top").length;
   const pSeamTop = progress[nTop - 1] ?? 0;
@@ -866,7 +874,10 @@ export function render(
   const fam = p.fontFamily || "Avantt";
   const gap = LABEL_GAP * S;
   const maxW = W * 0.92;
-  const blockStagger = 0.5 * p.stagger;
+  const blockStagger = p.stagger;
+  const slide = 0.12 * S;
+  // which side each word slides in from: seeded, so neighbours differ
+  const seamDir = (base: number) => (i: number) => (rand(p.blockSeed, 900 + base + i) < 0.5 ? -1 : 1);
   // seam blocks: block i folds out between 30% progress, starting 6% later
   // per block (so on close the last one out is the first one back)
   const seamReveal = (pr: number) => (i: number) => 1 - clamp01((pr - 0.06 * i) / 0.3);
@@ -876,10 +887,10 @@ export function render(
   const seamH = (seamStage?.h ?? 0) + (seamStage && seamDay ? gap : 0) + (seamDay?.h ?? 0);
   let y = H / 2 - seamH / 2;
   if (seamStage) {
-    drawRow(ctx, seamStage, cx, y, gap, seamReveal(pSeamTop), p.colors, fam);
+    drawRow(ctx, seamStage, cx, y, gap, seamReveal(pSeamTop), seamDir(0), slide, p.colors, fam);
     y += seamStage.h + gap;
   }
-  if (seamDay) drawRow(ctx, seamDay, cx, y, gap, seamReveal(pSeamBot), p.colors, fam);
+  if (seamDay) drawRow(ctx, seamDay, cx, y, gap, seamReveal(pSeamBot), seamDir(10), slide, p.colors, fam);
 
   const ac = scene.artist;
   const times = layoutRow(ctx, [p.timeStart, p.timeEnd].map((s) => s.trim()).filter(Boolean), STYLE_TINY, S, gap, maxW, fam);
@@ -916,6 +927,8 @@ export function render(
           anyOpen = Math.max(anyOpen, pr);
           return pr;
         },
+        (i) => (rand(p.blockSeed, 950 + base + i) < 0.5 ? -1 : 1),
+        slide,
         p.colors,
         fam,
       );

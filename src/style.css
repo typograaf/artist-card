@@ -111,8 +111,6 @@ html, body {
   min-width: 0;
   text-transform: uppercase;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .row.field { gap: 12px; }
 .row.field > .lbl { flex: 0 0 50px; }
@@ -128,6 +126,7 @@ html, body {
 
 input[type="text"] {
   height: var(--control);
+  line-height: normal;
   padding: 0 6px;
   border: 0;
   border-radius: 0;
