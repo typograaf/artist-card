@@ -28,7 +28,7 @@ export function fileStem(p: Params, scale: number): string {
 
 async function fontsReady(p: Params) {
   try {
-    await document.fonts.load(`800 100px "${p.fontFamily}"`);
+    await document.fonts.load(`700 100px "${p.fontFamily}"`);
     await document.fonts.ready;
   } catch {
     /* render with whatever is available */

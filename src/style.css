@@ -1,4 +1,18 @@
 @font-face {
+  font-family: "Avantt";
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+  src: url("/fonts/Avantt-Bold.otf") format("opentype");
+}
+@font-face {
+  font-family: "Avantt";
+  font-weight: 600;
+  font-style: normal;
+  font-display: block;
+  src: url("/fonts/Avantt-SemiBold.otf") format("opentype");
+}
+@font-face {
   font-family: "Afical Neue";
   font-weight: 500;
   font-style: normal;

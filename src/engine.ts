@@ -35,6 +35,7 @@ export interface Params {
   holeVariation: number; // 0..1
   shapeSeed: number;
   duration: number; // s, one row's open/close transition
+  moveDuration: number; // s, one block-width transition (reference ~3 s)
   stagger: number; // s between row ranks
   staggerOrder: StaggerOrder;
   easing: Bezier;
@@ -51,7 +52,7 @@ export interface Params {
 }
 
 export const EASING_PRESETS: Record<string, Bezier> = {
-  Measured: [0.8, 0.1, 0.1, 0.8],
+  Measured: [0.7, 0.1, 0.1, 0.9],
   "Ease in-out": [0.42, 0, 0.58, 1],
   Snap: [0.85, 0, 0.15, 1],
   "Ease out": [0, 0, 0.2, 1],
@@ -66,16 +67,17 @@ export const DEFAULT_PARAMS: Params = {
   unit: 40,
   focus: "top",
   blockSeed: 7,
-  movement: 0.5,
+  movement: 0.75,
   holeSize: 1,
   holeVariation: 0.3,
   shapeSeed: 3,
-  duration: 1.5,
+  duration: 1.6,
+  moveDuration: 3,
   stagger: 0.15,
   staggerOrder: "center",
-  easing: [0.8, 0.1, 0.1, 0.8],
+  easing: [0.7, 0.1, 0.1, 0.9],
   holdClosed: 1.8,
-  holdOpen: 4.3,
+  holdOpen: 4.1,
   colors: {
     topA: "#7E9EFC",
     topB: "#0A06FD",
@@ -87,7 +89,7 @@ export const DEFAULT_PARAMS: Params = {
   artist: "Kaytranada",
   stage: "MAIN STAGE",
   date: "Vendredi 28.08",
-  fontFamily: "Manrope",
+  fontFamily: "Avantt",
   imageZoom: 1,
   imageX: 0,
   imageY: 0,
@@ -283,41 +285,57 @@ export function buildScene(p: Params): Scene {
     rows[i].holeR = Math.min(rows[i].holeR, rows[i - 1].holeR);
   }
 
-  // Block width transitions: optional move in the closed hold, the opening
-  // move (same easing/stagger as the hole), extra moves during the open hold
-  // (never overlapping), and the closing move back to m0 so the loop is seamless.
+  // Block width transitions. Measured on the reference: each row's width is
+  // changing about 45% of the time in ~3 s eased transitions. The opening
+  // transition starts with the row's hole (same stagger, same curve, longer),
+  // extra transitions fill the open hold, and the closing transition starts
+  // with the hole closing and may run on across the loop point (the card is
+  // closed and static, the blocks still glide), exactly like the video.
   const d = p.duration;
+  const T = tl.total;
   for (const r of rows) {
     const k = r.index;
     const moves: Move[] = [];
     let m = r.m0;
     const openAt = tOpen + r.delay;
     const closeAt = tClose + r.closeDelay;
-    const latest = openAt - d; // a pre-move must end before the opening move
-    if (latest >= 0.1 && rand(p.blockSeed, k, 20) < p.movement) {
-      const t = 0.1 + rand(p.blockSeed, k, 21) * (latest - 0.1);
-      const to = pickStep(m, rand(p.blockSeed, k, 22));
-      moves.push({ t, d, from: m, to });
-      m = to;
-    }
+    // the closing transition must end before the next loop's opening one
+    const closeD = Math.max(0.1, Math.min(p.moveDuration, T + openAt - closeAt));
+    const openD = Math.max(0.1, Math.min(p.moveDuration, closeAt - openAt));
     const m1 = pickStep(m, rand(p.blockSeed, k, 3));
-    moves.push({ t: openAt, d, from: m, to: m1 });
+    moves.push({ t: openAt, d: openD, from: m, to: m1 });
     m = m1;
-    const a = openAt + d;
-    const b = closeAt - d;
-    const L = Math.max(0, b - a);
-    const nMax = Math.floor(L / d);
-    const nIdle = Math.min(nMax, Math.floor(p.movement * nMax + rand(p.blockSeed, k, 30)));
+    const a = openAt + openD;
+    const L = Math.max(0, closeAt - a);
+    const nMax = Math.floor(L / p.moveDuration);
+    const nIdle = Math.min(nMax, Math.floor((p.movement * L) / p.moveDuration + rand(p.blockSeed, k, 30)));
     if (nIdle > 0) {
-      const slot = L / nIdle;
+      // holds between transitions: the leftover time split by seeded weights
+      const weights: number[] = [];
+      let sum = 0;
+      for (let j = 0; j <= nIdle; j++) {
+        const wgt = 0.2 + rand(p.blockSeed, k, 40 + j);
+        weights.push(wgt);
+        sum += wgt;
+      }
+      const spare = L - nIdle * p.moveDuration;
+      let t = a;
       for (let j = 0; j < nIdle; j++) {
-        const t = a + slot * j + rand(p.blockSeed, k, 40 + j) * (slot - d);
+        t += (spare * weights[j]) / sum;
         const to = pickStep(m, rand(p.blockSeed, k, 60 + j));
-        moves.push({ t, d, from: m, to });
+        moves.push({ t, d: p.moveDuration, from: m, to });
         m = to;
+        t += p.moveDuration;
       }
     }
-    moves.push({ t: closeAt, d, from: m, to: r.m0 });
+    if (m === r.m0) {
+      // nothing to return to: bounce out and back so the row still glides
+      const via = pickStep(m, rand(p.blockSeed, k, 90));
+      moves.push({ t: closeAt, d: closeD / 2, from: m, to: via });
+      moves.push({ t: closeAt + closeD / 2, d: closeD / 2, from: via, to: r.m0 });
+    } else {
+      moves.push({ t: closeAt, d: closeD, from: m, to: r.m0 });
+    }
     r.moves = moves;
   }
 
@@ -366,6 +384,13 @@ export function rowProgress(scene: Scene, p: Params, r: RowSpec, t: number): num
 
 /** Block width multiplier (1..3 non-focus, fractional while moving) at time t. */
 export function rowMultiplier(scene: Scene, r: RowSpec, t: number): number {
+  const T = scene.tl.total;
+  // closing transitions may run past the loop point into the next cycle
+  for (const mv of r.moves) {
+    if (mv.t + mv.d > T && t + T >= mv.t && t + T < mv.t + mv.d) {
+      return mv.from + (mv.to - mv.from) * eased(scene, (t + T - mv.t) / mv.d);
+    }
+  }
   let m = r.m0;
   for (const mv of r.moves) {
     if (t < mv.t) break;
@@ -435,8 +460,18 @@ interface LabelMetrics {
   descent: number;
 }
 
+export const LABEL_WEIGHT = 700;
+export const LABEL_TRACKING = -0.02; // em, the reference's Figma -2%
+
 function labelFont(fs: number, family: string) {
-  return `800 ${fs}px "${family}", "Manrope", system-ui, sans-serif`;
+  return `${LABEL_WEIGHT} ${fs}px "${family}", "Manrope", system-ui, sans-serif`;
+}
+
+/** Apply the label tracking where the canvas supports it (Chrome, Safari 17.4+). */
+function setTracking(ctx: CanvasRenderingContext2D, fs: number) {
+  if ("letterSpacing" in ctx) {
+    (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = `${LABEL_TRACKING * fs}px`;
+  }
 }
 
 /**
@@ -455,6 +490,7 @@ function measureLabel(
 ): LabelMetrics {
   const measure = (size: number) => {
     ctx.font = labelFont(size, family);
+    setTracking(ctx, size);
     const m = ctx.measureText(text);
     const cap = ctx.measureText("H");
     const ascent = capsOnly ? cap.actualBoundingBoxAscent || size * 0.7 : m.actualBoundingBoxAscent || size * 0.7;
@@ -491,6 +527,7 @@ function drawLabel(
   ctx.fillRect(cx - m.bw / 2 + offsetX, top, m.bw, m.bh);
   ctx.fillStyle = colors.labelText;
   ctx.font = labelFont(m.fs, family);
+  setTracking(ctx, m.fs);
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
   const inkH = m.ascent + m.descent;
@@ -552,10 +589,9 @@ export function render(
   const foldOut = (pr: number) => Math.min(1, pr / 0.3);
   const slide = 0.11 * S;
 
-  const padX = 0.016 * S;
-  const padY = 0.0435 * S;
-  const stage = measureLabel(ctx, p.stage, 0.085 * S, fam, padX, padY, W * 0.92, true);
-  const stageTop = H / 2 + 0.048 * S - stage.bh;
+  const padY = 0.043 * S;
+  const stage = measureLabel(ctx, p.stage, 0.089 * S, fam, 0.0095 * S, padY, W * 0.92, true);
+  const stageTop = H / 2 + 0.046 * S - stage.bh;
   drawLabel(
     ctx,
     p.stage,
@@ -567,8 +603,8 @@ export function render(
     -slide * foldOut(pSeamTop),
     p.colors,
   );
-  const date = measureLabel(ctx, p.date, 0.042 * S, fam, padX, padY, W * 0.92, true);
-  const dateTop = stageTop + stage.bh + 0.0185 * S;
+  const date = measureLabel(ctx, p.date, 0.046 * S, fam, 0.013 * S, padY, W * 0.92, true);
+  const dateTop = stageTop + stage.bh + 0.021 * S;
   drawLabel(
     ctx,
     p.date,
@@ -583,14 +619,14 @@ export function render(
 
   const ac = scene.artist;
   const pa = segmentProgress(scene, t, ac.openAt, ac.openD, ac.closeAt, ac.closeD);
-  const artist = measureLabel(ctx, p.artist, 0.14 * S, fam, 0.0175 * S, 0.022 * S, W * 0.92, false);
+  const artist = measureLabel(ctx, p.artist, 0.145 * S, fam, 0.0097 * S, 0.0213 * S, W * 0.92, false);
   drawLabel(
     ctx,
     p.artist,
     artist,
     fam,
     cx,
-    H - 0.058 * S - artist.bh,
+    H - 0.06 * S - artist.bh,
     (artist.bw / 2) * pa,
     -0.12 * S * (1 - pa),
     p.colors,

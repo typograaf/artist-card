@@ -27,11 +27,14 @@ npm run build    # dist/
 - **Rows** top / bottom counts. **Thick blocks** picks the half whose blocks
   are one unit thicker (2/3/4 units instead of 1/2/3, as measured in the
   reference).
-- **Blocks** unit size, extra block moves, seed. Each row's block width is
-  1, 2 or 3 units and animates between neighbouring values (a horizontal
-  scale about the seam) with the opening easing and stagger, plus seeded
-  extra moves during the holds when "Extra block moves" is above 0. Moves
-  never overlap, and the loop returns to its starting widths.
+- **Blocks** unit size, extra block moves, block move length, seed. Each
+  row's block width is 1, 2 or 3 units and glides between neighbouring
+  values (a horizontal scale about the seam) in transitions of "Block move
+  length" (3 s like the reference) using the opening easing: one starts with
+  the row's opening, extra ones fill the open hold ("Extra block moves"),
+  and one starts with the closing and may run on across the loop point, so
+  the rows are in motion about half the time, as in the video. Transitions
+  never overlap and the loop is seamless.
 - **Opening** duration, stagger per row, stagger order (closing runs in the
   reverse order, outer rows first, like the reference), easing (presets or a
   custom cubic-bezier; the same curve drives the block moves).
@@ -41,6 +44,6 @@ npm run build    # dist/
 - **Colours** the two pairs plus label background and text.
 - **Settings** copy / paste the whole state as JSON (values are clamped).
 
-The default easing `cubic-bezier(0.80, 0.10, 0.10, 0.80)`, the 0.15 s
-stagger, the label boxes and their fold timings were measured from the
-reference video.
+The default easing `cubic-bezier(0.70, 0.10, 0.10, 0.90)` over 1.6 s, the
+0.15 s stagger, the 3 s block transitions, the label boxes and their fold
+timings were all measured from the reference video.

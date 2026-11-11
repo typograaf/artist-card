@@ -247,6 +247,7 @@ type NumKey =
   | "unit"
   | "movement"
   | "duration"
+  | "moveDuration"
   | "stagger"
   | "holeSize"
   | "holeVariation"
@@ -270,7 +271,8 @@ const pct = (v: number) => `${Math.round(v * 100)}%`;
 const secs = (v: number) => `${v.toFixed(2)} s`;
 const sliderDefs: SliderDef[] = [
   { key: "unit", label: "Block unit", min: 12, max: 160, step: 1, format: (v) => `${v.toFixed(0)}px`, container: "blockSliders", title: "Width of one block unit at 1x; rows use 1, 2 or 3 units" },
-  { key: "movement", label: "Extra block moves", min: 0, max: 1, step: 0.01, format: pct, container: "blockSliders", title: "Width changes that happen on their own during the holds, without any opening" },
+  { key: "movement", label: "Extra block moves", min: 0, max: 1, step: 0.01, format: pct, container: "blockSliders", title: "How much of the open hold the blocks keep changing width on their own; 100% is near-continuous" },
+  { key: "moveDuration", label: "Block move length", min: 0.5, max: 6, step: 0.05, format: secs, container: "blockSliders", title: "Length of one block-width transition; the reference glides for about 3 s" },
   { key: "duration", label: "Duration", min: 0.1, max: 4, step: 0.05, format: secs, container: "openSliders" },
   { key: "stagger", label: "Stagger per row", min: 0, max: 1, step: 0.01, format: secs, container: "openSliders" },
   { key: "holeSize", label: "Hole width", min: 0, max: 1, step: 0.01, format: pct, container: "shapeSliders", title: "How far the seam rows open, as a share of the width" },
@@ -470,7 +472,7 @@ function ensureGoogleFont(family: string): Promise<void> {
       };
       document.head.appendChild(link);
     };
-    add(`${base}:wght@800&display=swap`, () => add(`${base}&display=swap`, () => resolve()));
+    add(`${base}:wght@700&display=swap`, () => add(`${base}&display=swap`, () => resolve()));
   });
   requestedFonts.set(f, p);
   return p;
@@ -484,7 +486,7 @@ function fontLoaded(family: string): boolean {
 async function waitForFont(family: string) {
   await ensureGoogleFont(family);
   try {
-    await document.fonts.load(`800 100px "${family}"`);
+    await document.fonts.load(`700 100px "${family}"`);
   } catch {
     /* fall back silently */
   }
@@ -493,7 +495,7 @@ async function waitForFont(family: string) {
 }
 let fontTimer = 0;
 fontFamilyEl.addEventListener("input", () => {
-  params.fontFamily = fontFamilyEl.value.trim() || "Manrope";
+  params.fontFamily = fontFamilyEl.value.trim() || "Avantt";
   fontStatusEl.textContent = "loading";
   schedule();
   window.clearTimeout(fontTimer);
@@ -506,7 +508,7 @@ fontInput.addEventListener("change", async () => {
   if (!file) return;
   const family = file.name.replace(/\.[^.]+$/, "");
   try {
-    const face = new FontFace(family, await file.arrayBuffer(), { weight: "800" });
+    const face = new FontFace(family, await file.arrayBuffer(), { weight: "700" });
     await face.load();
     document.fonts.add(face);
     fileFonts.add(family);
@@ -802,7 +804,7 @@ function applySettings(str: string): boolean {
     }
   }
   if (!applied) return false;
-  if (!params.fontFamily) params.fontFamily = "Manrope";
+  if (!params.fontFamily) params.fontFamily = "Avantt";
   syncUI();
   applyFormat();
   waitForFont(params.fontFamily);
