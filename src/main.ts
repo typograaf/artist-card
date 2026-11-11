@@ -764,7 +764,8 @@ exportMp4Btn.addEventListener("click", async () => {
     });
   } catch (err) {
     console.error("[export]", err);
-    alert("Export failed; check the console.");
+    const msg = err instanceof Error ? err.message : String(err);
+    alert(`MP4 export failed: ${msg}\nIf Safari keeps failing, Chrome encodes the same loop in a second.`);
   } finally {
     exportMp4Btn.textContent = "Export MP4";
     exportMp4Btn.disabled = false;

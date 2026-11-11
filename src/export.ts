@@ -67,7 +67,33 @@ export function supportsVideoExport(): boolean {
   return "VideoEncoder" in window && "VideoFrame" in window;
 }
 
-/** Encode exactly one loop (scene.tl.total seconds) to H.264 MP4. */
+/** First encoder config the browser accepts, from the most specific down. */
+async function pickConfig(outW: number, outH: number, fps: number): Promise<VideoEncoderConfig> {
+  const codec = pickH264Codec(outW, outH);
+  const bitrate = Math.min(100_000_000, Math.round(outW * outH * fps * 0.25));
+  const candidates: VideoEncoderConfig[] = [
+    { codec, width: outW, height: outH, framerate: fps, bitrate, bitrateMode: "variable", avc: { format: "avc" } },
+    { codec, width: outW, height: outH, framerate: fps, bitrate, avc: { format: "avc" } },
+    { codec, width: outW, height: outH, framerate: fps, bitrate },
+    { codec: "avc1.42001f", width: outW, height: outH, framerate: fps, bitrate },
+  ];
+  for (const c of candidates) {
+    try {
+      const r = await VideoEncoder.isConfigSupported(c);
+      if (r.supported) return r.config ?? c;
+    } catch {
+      /* try the next one */
+    }
+  }
+  return candidates[0];
+}
+
+/**
+ * Encode exactly one loop (scene.tl.total seconds) to H.264 MP4.
+ * Backpressure is handled by flushing every few frames rather than polling
+ * encodeQueueSize, which WebKit does not keep up to date (it used to hang
+ * the export in Safari); a watchdog aborts if the encoder stops producing.
+ */
 export async function exportMp4(
   p: Params,
   scene: Scene,
@@ -92,23 +118,38 @@ export async function exportMp4(
     fastStart: "in-memory",
   });
   let encoderError: unknown = null;
+  let chunks = 0;
+  let lastChunkAt = performance.now();
   const encoder = new VideoEncoder({
-    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+    output: (chunk, meta) => {
+      try {
+        muxer.addVideoChunk(chunk, meta);
+        chunks++;
+        lastChunkAt = performance.now();
+      } catch (e) {
+        encoderError = e;
+      }
+    },
     error: (e) => {
       encoderError = e;
     },
   });
+  const STALL_MS = 20_000;
+  const flushWithWatchdog = async () => {
+    const started = performance.now();
+    let done = false;
+    const flushed = encoder.flush().then(() => (done = true));
+    while (!done) {
+      await Promise.race([flushed, sleep(250)]);
+      if (done) break;
+      if (encoderError) throw encoderError;
+      if (performance.now() - Math.max(lastChunkAt, started) > STALL_MS) {
+        throw new Error(`Encoder stalled after ${chunks} frames`);
+      }
+    }
+  };
   try {
-    encoder.configure({
-      codec: pickH264Codec(outW, outH),
-      width: outW,
-      height: outH,
-      framerate: fps,
-      bitrate: Math.min(100_000_000, Math.round(outW * outH * fps * 0.25)),
-      bitrateMode: "variable",
-      avc: { format: "avc" },
-    });
-
+    encoder.configure(await pickConfig(outW, outH, fps));
     for (let i = 0; i < totalFrames; i++) {
       if (encoderError) throw encoderError;
       render(ctx, p, scene, i / fps, scale, image);
@@ -118,13 +159,14 @@ export async function exportMp4(
       });
       encoder.encode(frame, { keyFrame: i % (fps * 2) === 0 });
       frame.close();
-      while (encoder.encodeQueueSize > 16) await sleep(8);
-      if (i % 5 === 0) {
-        onProgress(i / totalFrames);
-        await sleep(0);
-      }
+      // bounded queue: let the encoder catch up every few frames
+      if (i % 8 === 7) await flushWithWatchdog();
+      onProgress(i / totalFrames);
+      await sleep(0);
     }
-    await encoder.flush();
+    await flushWithWatchdog();
+    if (encoderError) throw encoderError;
+    if (chunks === 0) throw new Error("The encoder produced no frames");
     muxer.finalize();
     const buffer = muxer.target.buffer;
     downloadBlob(new Blob([buffer], { type: "video/mp4" }), `${fileStem(p, scale)}.mp4`);
