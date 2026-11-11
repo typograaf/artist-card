@@ -37,9 +37,11 @@ npm run build    # dist/
   its closing (same stagger as the hole, running on across the loop point);
   the drift chain runs free and seamless. The pattern scales about a seeded
   point away from the seam, so left and right halves move differently.
-- **Floating blocks** per-row count (0 = none) and size min/max in units:
-  free blocks inside each open row that grow, shrink and drift on the same
-  move and travel ranges, clipped to the hole.
+- **Floating blocks** per-row count (0 = none), size min/max in units, own
+  move length and travel ranges:
+  masks inside each open row showing their own two-colour stripes (changing
+  like the rows), growing, shrinking to nothing and back (spawn / despawn)
+  and drifting, clipped to the hole.
 - **Opening** duration, stagger per row, stagger order (closing runs in the
   reverse order, outer rows first, like the reference), easing (presets or a
   custom cubic-bezier; the same curve drives the block moves).

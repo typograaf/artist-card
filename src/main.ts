@@ -251,6 +251,10 @@ type NumKey =
   | "floatCount"
   | "floatMin"
   | "floatMax"
+  | "floatMoveMin"
+  | "floatMoveMax"
+  | "floatTravelMin"
+  | "floatTravelMax"
   | "duration"
   | "stagger"
   | "holeSize"
@@ -281,9 +285,13 @@ const sliderDefs: SliderDef[] = [
   { key: "moveMax", label: "Move length max", min: 0.3, max: 8, step: 0.05, format: secs, container: "blockSliders", pairMin: "moveMin" },
   { key: "travelMin", label: "Travel min", min: 0, max: 400, step: 1, format: px, container: "blockSliders", pairMax: "travelMax", title: "Smallest sideways step per keyframe, at 1x" },
   { key: "travelMax", label: "Travel max", min: 0, max: 400, step: 1, format: px, container: "blockSliders", pairMin: "travelMin", title: "Largest sideways step per keyframe; the drift stays within this distance" },
-  { key: "floatCount", label: "Per row", min: 0, max: 8, step: 1, format: (v) => v.toFixed(0), container: "floatSliders", title: "Free blocks inside each open row; they grow, shrink and drift with the move and travel ranges" },
+  { key: "floatCount", label: "Per row", min: 0, max: 8, step: 1, format: (v) => v.toFixed(0), container: "floatSliders", title: "Masks inside each open row showing their own stripes; they grow, shrink to nothing and back, and drift" },
   { key: "floatMin", label: "Size min", min: 0.2, max: 8, step: 0.1, format: units, container: "floatSliders", pairMax: "floatMax" },
   { key: "floatMax", label: "Size max", min: 0.2, max: 8, step: 0.1, format: units, container: "floatSliders", pairMin: "floatMin" },
+  { key: "floatMoveMin", label: "Move length min", min: 0.2, max: 8, step: 0.05, format: secs, container: "floatSliders", pairMax: "floatMoveMax", title: "Keyframe spacing of the floating blocks: size, position, stripes" },
+  { key: "floatMoveMax", label: "Move length max", min: 0.2, max: 8, step: 0.05, format: secs, container: "floatSliders", pairMin: "floatMoveMin" },
+  { key: "floatTravelMin", label: "Travel min", min: 0, max: 600, step: 1, format: px, container: "floatSliders", pairMax: "floatTravelMax" },
+  { key: "floatTravelMax", label: "Travel max", min: 0, max: 600, step: 1, format: px, container: "floatSliders", pairMin: "floatTravelMin" },
   { key: "duration", label: "Duration", min: 0.1, max: 4, step: 0.05, format: secs, container: "openSliders" },
   { key: "stagger", label: "Stagger per row", min: 0, max: 1, step: 0.01, format: secs, container: "openSliders" },
   { key: "holeSize", label: "Hole width", min: 0, max: 1, step: 0.01, format: pct, container: "shapeSliders", title: "How far the rows open; 100% leaves no blocks" },

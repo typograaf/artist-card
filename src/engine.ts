@@ -37,6 +37,10 @@ export interface Params {
   floatCount: number; // floating blocks per open row
   floatMin: number; // units, smallest floating block
   floatMax: number; // units, largest
+  floatMoveMin: number; // s, floating block keyframe spacing
+  floatMoveMax: number;
+  floatTravelMin: number; // px at 1x, floating block sideways step
+  floatTravelMax: number;
   holeSize: number; // 0..1; 1 = every row fully open
   holeVariation: number; // 0..1
   shapeSeed: number;
@@ -79,6 +83,10 @@ export const DEFAULT_PARAMS: Params = {
   floatCount: 0,
   floatMin: 1,
   floatMax: 2.5,
+  floatMoveMin: 1,
+  floatMoveMax: 2.5,
+  floatTravelMin: 40,
+  floatTravelMax: 200,
   holeSize: 0.9,
   holeVariation: 0.3,
   shapeSeed: 3,
@@ -172,9 +180,11 @@ export interface Key {
 
 export interface Floater {
   x0: number; // px at 1x, relative to the seam
-  useB: boolean; // block colour (true) or base colour
-  widthKeys: Key[]; // px at 1x
-  shiftKeys: Key[]; // px at 1x
+  phase: number; // stripe phase inside the mask
+  widthKeys: Key[]; // mask width, px at 1x (0 = despawned)
+  shiftKeys: Key[]; // mask position drift, px at 1x
+  stripeKeys: Key[]; // stripe multiplier chain (1..3) inside the mask
+  stripeShift: Key[]; // stripe drift inside the mask, px at 1x
 }
 
 export interface RowSpec {
@@ -413,28 +423,42 @@ export function buildScene(p: Params): Scene {
     r.widthKeys = keys;
     r.shiftKeys = driftChain(T, moveMin, moveMax, travelMin, travelMax, rr);
 
-    // Floating blocks: free rectangles inside the hole, growing, shrinking
-    // and drifting on their own chains; clipped to the hole so they are born
-    // out of the seam and swallowed by it.
+    // Floating blocks: masks inside the hole showing their own stripe
+    // pattern (changing colour like the rows), growing, shrinking to nothing
+    // and back (spawn / despawn), and drifting on their own ranges.
     const count = clampInt(p.floatCount, 0, 8);
     const reach = Math.min(r.holeL, r.holeR);
     if (count > 0 && reach > p.unit) {
       const fmin = Math.max(0.1, Math.min(p.floatMin, p.floatMax)) * p.unit;
       const fmax = Math.max(fmin, p.floatMax * p.unit);
+      const fMoveMin = Math.max(0.2, Math.min(p.floatMoveMin, p.floatMoveMax));
+      const fMoveMax = Math.max(fMoveMin, p.floatMoveMax);
+      const fTravelMin = Math.max(0, Math.min(p.floatTravelMin, p.floatTravelMax));
+      const fTravelMax = Math.max(fTravelMin, p.floatTravelMax);
       for (let j = 0; j < count; j++) {
         const fr = (key: number) => rand(p.blockSeed, k, 5000 + j * 100 + key);
         const lane = (j + 0.5) / count; // spread across the hole, then jitter
-        const x0 = -reach * 0.8 + (reach * 1.6 * (lane + (fr(1) - 0.5) * 0.6));
-        const wk: Key[] = [{ t: 0, v: 0 }];
-        const wtimes = fillSpan(0, T, moveMin, moveMax, (i) => fr(10 + i));
-        wtimes.forEach((tk, i) => wk.push({ t: tk, v: fmin + fr(40 + i) * (fmax - fmin) }));
-        wk[0].v = fmin + fr(2) * (fmax - fmin);
+        const x0 = -reach * 0.8 + reach * 1.6 * (lane + (fr(1) - 0.5) * 0.6);
+        const size = (i: number) => (fr(40 + i) < 0.35 ? 0 : fmin + fr(41 + i * 7) * (fmax - fmin));
+        const wk: Key[] = [{ t: 0, v: size(0) }];
+        const wtimes = fillSpan(0, T, fMoveMin, fMoveMax, (i) => fr(10 + i));
+        wtimes.forEach((tk, i) => wk.push({ t: tk, v: size(i + 1) }));
         wk.push({ t: T, v: wk[0].v });
+        const sk: Key[] = [{ t: 0, v: 1 + Math.floor(fr(3) * 3) }];
+        let sv = sk[0].v;
+        const stimes = fillSpan(0, T, fMoveMin, fMoveMax, (i) => fr(80 + i));
+        stimes.forEach((tk, i) => {
+          sv = pickStep(sv, fr(90 + i));
+          sk.push({ t: tk, v: sv });
+        });
+        sk.push({ t: T, v: sk[0].v });
         r.floaters.push({
           x0,
-          useB: j % 2 === 0,
+          phase: fr(4) * 2,
           widthKeys: wk,
-          shiftKeys: driftChain(T, moveMin, moveMax, travelMin, travelMax, (i) => fr(60 + i)),
+          shiftKeys: driftChain(T, fMoveMin, fMoveMax, fTravelMin, fTravelMax, (i) => fr(60 + i)),
+          stripeKeys: sk,
+          stripeShift: driftChain(T, fMoveMin, fMoveMax, fTravelMin * 0.5, fTravelMax * 0.5, (i) => fr(70 + i)),
         });
       }
     }
@@ -695,9 +719,14 @@ export function render(
       ctx.clip();
       for (const f of r.floaters) {
         const fw = evalChain(scene, f.widthKeys, t) * scale;
+        if (fw < 1) continue;
         const fx = cx + (f.x0 + evalChain(scene, f.shiftKeys, t)) * scale;
-        ctx.fillStyle = f.useB ? cB : cA;
-        ctx.fillRect(fx - fw / 2, y0, fw, h);
+        const sm = evalChain(scene, f.stripeKeys, t);
+        const sw = Math.max(1, p.unit * scale * (sm + (r.half === p.focus ? 1 : 0)));
+        const so = fx + evalChain(scene, f.stripeShift, t) * scale;
+        const a = Math.max(left, fx - fw / 2);
+        const b = Math.min(right, fx + fw / 2);
+        drawStripes(ctx, so, a, b, y0, h, sw, f.phase, cA, cB);
       }
       ctx.restore();
     }
