@@ -251,6 +251,7 @@ input[type="text"].center { text-align: center; }
 .ticks {
   flex: 1 1 0;
   min-width: 0;
+  overflow: hidden;
   height: 9px;
   display: flex;
   justify-content: space-between;

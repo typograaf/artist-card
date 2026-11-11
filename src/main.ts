@@ -128,8 +128,13 @@ function rebuild() {
 
 let tickEls: HTMLElement[] = [];
 let activeTick = -1;
+let ticksWidth = 0; // css px available for the tick strip
 function buildTicks() {
-  const n = Math.max(2, Math.round(scene.tl.total * TICKS_PER_SECOND));
+  // one tick per 1/15 s, fewer when the strip is too narrow (3 px ticks,
+  // at least 2.5 px apart) so the timeline always fits under the card
+  const wanted = Math.max(2, Math.round(scene.tl.total * TICKS_PER_SECOND));
+  const fit = ticksWidth > 0 ? Math.floor((ticksWidth + 2.5) / 5.5) : wanted;
+  const n = Math.max(2, Math.min(wanted, fit));
   if (n === tickEls.length) return;
   ticksEl.innerHTML = "";
   tickEls = [];
@@ -170,7 +175,11 @@ for (const ev of ["pointerup", "pointercancel"]) ticksEl.addEventListener(ev, ()
 
 // The timeline is as wide as the displayed card.
 new ResizeObserver(() => {
-  timelineEl.style.width = `${canvas.getBoundingClientRect().width}px`;
+  const w = canvas.getBoundingClientRect().width;
+  timelineEl.style.width = `${w}px`;
+  ticksWidth = Math.max(0, w - 50); // frame counter 40 + gap 10
+  buildTicks();
+  syncTime();
 }).observe(canvas);
 
 // ---------- playback ----------
