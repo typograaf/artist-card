@@ -54,9 +54,10 @@ Right column:
   travel** largest sideways step in px on the 1080 canvas. They show their
   own stripes, grow, shrink to nothing and back, and drift; they trail the
   opening a beat behind the hole edge and are gone once a row is fully open.
-- **Top / Bottom colours** click a swatch for a picker, hover it and press
-  Cmd+V to paste a hex (with or without #), `?` picks one of the thirteen
-  Touquet pairs.
+- **Colours** the 67 Touquet colourways, locked sets of four (top A / B,
+  bottom A / B): the arrows step through them, the box shows the current
+  number (type one to jump; `–` means custom colours). Click a swatch for a
+  picker, hover it and press Cmd+V to paste a hex (with or without #).
 - **Copy / Paste settings** the whole state as JSON (values are clamped).
   The URL hash always carries every setting that differs from the defaults
   (photo excepted), so the link itself restores the state.

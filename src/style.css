@@ -173,16 +173,21 @@ input[type="text"].center { text-align: center; }
 }
 .stepper input { text-align: center; }
 
-.swatch {
-  width: 45px;
+.swatch-grid {
+  display: grid;
+  grid-template-columns: 45px 45px;
+  grid-auto-rows: 1fr;
+  gap: var(--row-gap);
   height: var(--control);
+  flex: 0 0 93px;
+}
+.swatch {
   border: 0;
   padding: 0;
   cursor: pointer;
-  flex: 0 0 45px;
+  min-height: 0;
 }
 .swatch:hover, .swatch.hover { outline: 1px solid var(--text); outline-offset: -1px; }
-.swatches { display: flex; gap: var(--row-gap); }
 
 .foot {
   display: flex;

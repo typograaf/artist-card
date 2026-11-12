@@ -94,8 +94,8 @@ export const DEFAULT_PARAMS: Params = {
   holdClosed: 1.5,
   holdOpen: 1.5,
   colors: {
-    topA: "#0C08FF",
-    topB: "#829FFF",
+    topA: "#829FFF",
+    topB: "#1625F8",
     bottomA: "#00504E",
     bottomB: "#00201F",
     labelBg: "#FFEFA4",
@@ -113,22 +113,92 @@ export const DEFAULT_PARAMS: Params = {
   imageY: 0,
 };
 
-/** The Touquet colour pairs; the randomiser picks one of these. */
-export const COLOR_COMBOS: [string, string][] = [
-  ["#3F98FF", "#FFEFA4"],
-  ["#AA0026", "#FF979C"],
-  ["#212072", "#4C5EFF"],
-  ["#FFA81C", "#FC7E03"],
-  ["#01232C", "#027370"],
-  ["#63ECFF", "#007F59"],
-  ["#FFEFA4", "#A2A400"],
-  ["#FFA16C", "#640D00"],
-  ["#FFEFA4", "#FF979C"],
-  ["#80FFE3", "#027370"],
-  ["#AA0026", "#F64D1D"],
-  ["#E90062", "#AA0026"],
-  ["#65D36D", "#007F59"],
+/** The Touquet colourways, locked sets of four: top A, top B, bottom A,
+ *  bottom B. The first 35 are the original selection (A), the rest the
+ *  tonal and bold selection (B). The label stays #FFEFA4 with black text. */
+export type Colorway = [string, string, string, string];
+export const COLORWAYS: Colorway[] = [
+  ["#829FFF", "#1625F8", "#00504E", "#00201F"], // A01
+  ["#FDAA5B", "#A04B08", "#92C2F7", "#1625F8"], // A02
+  ["#70FFDF", "#00E3ED", "#8D5DF3", "#3D06B7"], // A03
+  ["#70FF97", "#00FA7D", "#8D5DF3", "#0906B7"], // A04
+  ["#00E3ED", "#02A9E8", "#A60821", "#400902"], // A05
+  ["#8D5DF3", "#5002DC", "#C67406", "#3C4002"], // A06
+  ["#FF63A0", "#ED0025", "#0906B7", "#020B40"], // A07
+  ["#5D52FA", "#0727D5", "#C602DC", "#6E047C"], // A08
+  ["#90FF70", "#00FA02", "#F3705D", "#A60821"], // A09
+  ["#BFF381", "#4AF502", "#879A0E", "#3C4002"], // A10
+  ["#E88602", "#A04B08", "#7F83F6", "#0727D5"], // A11
+  ["#F9FD5B", "#B8DC02", "#879A0E", "#3C4002"], // A12
+  ["#F8DA7C", "#C67406", "#F3705D", "#7C3904"], // A13
+  ["#5D52FA", "#3D06B7", "#70FFDF", "#07D562"], // A14
+  ["#4AF502", "#3BBA06", "#02A9E8", "#04417C"], // A15
+  ["#ED4084", "#A60821", "#92C2F7", "#0796D5"], // A16
+  ["#FF63A0", "#ED0025", "#EC41F6", "#8102A3"], // A17
+  ["#FDAA5B", "#E88602", "#A04B08", "#402202"], // A18
+  ["#FF63F4", "#ED00A5", "#8D5DF3", "#0906B7"], // A19
+  ["#F53A35", "#A60821", "#F792D5", "#E90062"], // A20
+  ["#FDAA5B", "#A04B08", "#F99390", "#F53A35"], // A21
+  ["#FF63A0", "#E90062", "#ED4084", "#7C0423"], // A22
+  ["#EC41F6", "#8102A3", "#E292F7", "#EC41F6"], // A23
+  ["#ED4084", "#A6086E", "#F792D5", "#ED4084"], // A24
+  ["#F792D5", "#ED4084", "#0906B7", "#020B40"], // A25
+  ["#E90062", "#A6086E", "#70FFDF", "#00E3ED"], // A26
+  ["#ED4084", "#A6086E", "#387CF5", "#041F7C"], // A27
+  ["#ED4084", "#A60821", "#BFF381", "#8FD507"], // A28
+  ["#FDAA5B", "#E88602", "#3D06B7", "#250240"], // A29
+  ["#FF63A0", "#ED0025", "#70FF97", "#06B72B"], // A30
+  ["#90FF70", "#00FA02", "#A6086E", "#400227"], // A31
+  ["#C602DC", "#8102A3", "#F8DA7C", "#E88602"], // A32
+  ["#FDAA5B", "#E88602", "#00504E", "#70FFDF"], // A33
+  ["#EC41F6", "#C602DC", "#879A0E", "#3C4002"], // A34
+  ["#F53A35", "#A60821", "#92C2F7", "#1649F8"], // A35
+  ["#1625F8", "#00FA7D", "#FF63A0", "#E90062"], // B01
+  ["#E90062", "#FF63A0", "#C602DC", "#70FFDF"], // B02
+  ["#00E3ED", "#02A9E8", "#FDAA5B", "#5002DC"], // B03
+  ["#FF63F4", "#ED00A5", "#FDAA5B", "#E90062"], // B04
+  ["#FF63F4", "#ED00A5", "#F9FD5B", "#ED0025"], // B05
+  ["#FF63A0", "#E90062", "#FF63F4", "#5002DC"], // B06
+  ["#ED0025", "#70FFDF", "#00E3ED", "#02A9E8"], // B07
+  ["#5002DC", "#8D5DF3", "#5002DC", "#00E3ED"], // B08
+  ["#E90062", "#FF63A0", "#C602DC", "#00FA02"], // B09
+  ["#5002DC", "#8D5DF3", "#1649F8", "#4AF502"], // B10
+  ["#ED00A5", "#FF63F4", "#E90062", "#70FFDF"], // B11
+  ["#ED00A5", "#FF63F4", "#5002DC", "#00FA02"], // B12
+  ["#FF63A0", "#E90062", "#70FFDF", "#ED0025"], // B13
+  ["#1625F8", "#70FFDF", "#FF63F4", "#ED00A5"], // B14
+  ["#00E3ED", "#02A9E8", "#70FFDF", "#E90062"], // B15
+  ["#E90062", "#00FA7D", "#00E3ED", "#02A9E8"], // B16
+  ["#FF63F4", "#ED00A5", "#70FFDF", "#1625F8"], // B17
+  ["#F3705D", "#F99390", "#00FA7D", "#5002DC"], // B18
+  ["#ED00A5", "#FF63F4", "#E90062", "#F9FD5B"], // B19
+  ["#E90062", "#70FFDF", "#F3705D", "#F99390"], // B20
+  ["#FF63A0", "#E90062", "#00E3ED", "#ED0025"], // B21
+  ["#E90062", "#F9FD5B", "#00FA7D", "#70FFDF"], // B22
+  ["#5002DC", "#8D5DF3", "#ED00A5", "#70FFDF"], // B23
+  ["#FF63F4", "#ED00A5", "#F3705D", "#5002DC"], // B24
+  ["#E90062", "#FDAA5B", "#8FD507", "#BFF381"], // B25
+  ["#F3705D", "#F99390", "#FF63A0", "#5002DC"], // B26
+  ["#5002DC", "#8D5DF3", "#ED0025", "#70FFDF"], // B27
+  ["#C602DC", "#E292F7", "#E90062", "#70FFDF"], // B28
+  ["#E90062", "#8FD507", "#ED0025", "#A60821"], // B29
+  ["#ED00A5", "#FF63F4", "#5002DC", "#00FA7D"], // B30
+  ["#FF63A0", "#E90062", "#F9FD5B", "#E90062"], // B31
+  ["#1625F8", "#70FFDF", "#5002DC", "#8D5DF3"], // B32
 ];
+
+/** 1-based index of the colourway matching the stripe colours, or 0 when custom. */
+export function colorwayIndex(c: Colors): number {
+  const u = (h: string) => h.toUpperCase();
+  const k = [u(c.topA), u(c.topB), u(c.bottomA), u(c.bottomB)].join();
+  const i = COLORWAYS.findIndex((w) => w.join() === k);
+  return i + 1;
+}
+
+/** The time block: "20:00 — 21:00" (one block), or whichever end is filled in. */
+export function timeLabel(p: Pick<Params, "timeStart" | "timeEnd">): string {
+  return [p.timeStart, p.timeEnd].map((s) => s.trim()).filter(Boolean).join(" \u2014 ");
+}
 
 // ---------- deterministic randomness ----------
 
@@ -414,7 +484,7 @@ export function buildScene(p: Params): Scene {
   const bottomDelay = p.stagger * bottomRow.rank;
   const bottomCloseDelay = span - bottomDelay;
   const seamBlocks = wordsOf(p.stage) + wordsOf(p.day);
-  const artistBlocks = [p.timeStart, p.timeEnd].filter((t) => t.trim()).length + wordsOf(p.artist) + wordsOf(p.stage);
+  const artistBlocks = (timeLabel(p) ? 1 : 0) + wordsOf(p.artist) + wordsOf(p.stage);
   const seamDelay = Math.min(p.stagger * rows[nTop - 1].rank, p.stagger * (rows[nTop]?.rank ?? Infinity));
   const seamOpenAt = tOpen + seamDelay;
   // One pace for every label move: 1 s per block and one row stagger
@@ -953,7 +1023,7 @@ export function render(
     y += r.h + gap;
   }
 
-  const times = layoutRow(ctx, [p.timeStart, p.timeEnd].map((s) => s.trim()).filter(Boolean), STYLE_TINY, S, gap, maxW, fam);
+  const times = layoutRow(ctx, timeLabel(p) ? [timeLabel(p)] : [], STYLE_TINY, S, gap, maxW, fam);
   const name = layoutRow(ctx, words(p.artist, false), STYLE_BIG, S, gap, maxW, fam);
   const stage2 = layoutRow(ctx, words(p.stage, true), STYLE_SMALL, S, gap, maxW, fam);
   const groupRows = [times, name, stage2].filter((r): r is LabelRow => !!r);

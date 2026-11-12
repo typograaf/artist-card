@@ -2,7 +2,8 @@ import "./style.css";
 import "vanilla-colorful/hex-color-picker.js";
 import type { HexColorPicker } from "vanilla-colorful/hex-color-picker.js";
 import {
-  COLOR_COMBOS,
+  COLORWAYS,
+  colorwayIndex,
   DEFAULT_PARAMS,
   FORMATS,
   buildScene,
@@ -420,6 +421,7 @@ const pairKeys: Record<PairKey, [keyof Colors, keyof Colors]> = {
   bottom: ["bottomA", "bottomB"],
 };
 const swatches: Partial<Record<keyof Colors, HTMLButtonElement>> = {};
+let colorwayEl: HTMLInputElement | null = null;
 let hoveredSwatch: keyof Colors | null = null;
 let popover: HTMLDivElement | null = null;
 let closePopoverListeners: (() => void) | null = null;
@@ -430,6 +432,7 @@ function setColor(key: keyof Colors, hex: string) {
     sw.style.background = hex;
     sw.title = hex;
   }
+  syncColorway();
   schedule();
 }
 function closePicker() {
@@ -467,45 +470,70 @@ function openPicker(anchor: HTMLElement, key: keyof Colors) {
     document.removeEventListener("keydown", onKey);
   };
 }
-function randomPair(current: [string, string]): [string, string] {
-  const others = COLOR_COMBOS.filter((c) => c[0] !== current[0] || c[1] !== current[1]);
-  const pool = others.length ? others : COLOR_COMBOS;
-  return pool[Math.floor(Math.random() * pool.length)];
+const swatchKeys: (keyof Colors)[] = ["topA", "topB", "bottomA", "bottomB"];
+function syncColorway() {
+  if (!colorwayEl) return;
+  const i = colorwayIndex(params.colors);
+  colorwayEl.value = i ? String(i) : "\u2013";
 }
-function buildColorRows() {
+function applyColorway(i: number) {
+  const n = COLORWAYS.length;
+  const idx = ((Math.round(i) - 1) % n + n) % n;
+  const w = COLORWAYS[idx];
+  swatchKeys.forEach((k, j) => setColor(k, w[j]));
+}
+function stepColorway(dir: 1 | -1) {
+  const i = colorwayIndex(params.colors);
+  // custom colours: the arrows enter the list at its ends
+  applyColorway(i ? i + dir : dir > 0 ? 1 : COLORWAYS.length);
+}
+function buildColorRow() {
   const host = $<HTMLDivElement>("colorGroup");
   host.innerHTML = "";
-  for (const pair of Object.keys(pairKeys) as PairKey[]) {
-    const [a, b] = pairKeys[pair];
-    const row = document.createElement("div");
-    row.className = "row";
-    row.innerHTML = `
-      <span class="lbl">${pair} colours</span>
-      <div class="swatches">
-        <button type="button" class="swatch" data-key="${a}"></button>
-        <button type="button" class="swatch" data-key="${b}"></button>
-        <button type="button" class="btn w20" data-random title="Random pair from the Touquet set">?</button>
-      </div>`;
-    for (const sw of row.querySelectorAll<HTMLButtonElement>(".swatch")) {
-      const key = sw.dataset.key as keyof Colors;
-      swatches[key] = sw;
-      sw.style.background = params.colors[key];
-      sw.title = params.colors[key];
-      sw.addEventListener("click", () => openPicker(sw, key));
-      sw.addEventListener("pointerenter", () => (hoveredSwatch = key));
-      sw.addEventListener("pointerleave", () => {
-        if (hoveredSwatch === key) hoveredSwatch = null;
-      });
-    }
-    (row.querySelector("[data-random]") as HTMLButtonElement).addEventListener("click", () => {
-      const next = randomPair([params.colors[a], params.colors[b]]);
-      setColor(a, next[0]);
-      setColor(b, next[1]);
+  const row = document.createElement("div");
+  row.className = "row colours";
+  row.innerHTML = `
+    <span class="lbl">Colours</span>
+    <button type="button" class="btn w20" data-dir="-1" title="Previous colourway">\u2190</button>
+    <input type="text" class="w45 center" id="colorwayIndex" spellcheck="false" title="Colourway 1 to ${COLORWAYS.length}" />
+    <div class="swatch-grid">
+      ${swatchKeys.map((k) => `<button type="button" class="swatch" data-key="${k}"></button>`).join("")}
+    </div>
+    <button type="button" class="btn w20" data-dir="1" title="Next colourway">\u2192</button>`;
+  for (const sw of row.querySelectorAll<HTMLButtonElement>(".swatch")) {
+    const key = sw.dataset.key as keyof Colors;
+    swatches[key] = sw;
+    sw.style.background = params.colors[key];
+    sw.title = params.colors[key];
+    sw.addEventListener("click", () => openPicker(sw, key));
+    sw.addEventListener("pointerenter", () => (hoveredSwatch = key));
+    sw.addEventListener("pointerleave", () => {
+      if (hoveredSwatch === key) hoveredSwatch = null;
     });
-    host.appendChild(row);
   }
+  for (const b of row.querySelectorAll<HTMLButtonElement>("[data-dir]")) {
+    b.addEventListener("click", () => stepColorway(Number(b.dataset.dir) as 1 | -1));
+  }
+  const el = (colorwayEl = row.querySelector("#colorwayIndex") as HTMLInputElement);
+  const commit = () => {
+    const n = parseInt(el.value, 10);
+    if (Number.isFinite(n) && n >= 1 && n <= COLORWAYS.length) applyColorway(n);
+    else syncColorway();
+  };
+  el.addEventListener("change", commit);
+  el.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      commit();
+      el.blur();
+    } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      e.preventDefault();
+      stepColorway(e.key === "ArrowUp" ? 1 : -1);
+    }
+  });
+  host.appendChild(row);
+  syncColorway();
 }
-buildColorRows();
+buildColorRow();
 
 // Cmd+V over a swatch pastes a hex from the clipboard (with or without #).
 // Cmd+V with an image on the clipboard loads it as the background.
