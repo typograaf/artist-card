@@ -22,7 +22,7 @@
  "fColA": "var we = effect(\"WE\")(\"3D Point\"), win = effect(\"WIN\")(\"3D Point\");\nvar Hh = thisComp.height, top = win[2] < Hh / 2;\nvar nr = Math.max(1, Math.round(thisComp.layer(\"CTRL\").effect(top ? \"Rows top\" : \"Rows bottom\")(\"Slider\")));\nvar y0 = Math.round(win[2]), y1 = Math.round(win[2] + (Hh / 2) / nr);\nvar w = we[0], edge = we[1], from = win[0], to = win[1];\nthisComp.layer(\"CTRL\").effect(top ? \"Top A\" : \"Bottom A\")(\"Color\");",
  "fColB": "var we = effect(\"WE\")(\"3D Point\"), win = effect(\"WIN\")(\"3D Point\");\nvar Hh = thisComp.height, top = win[2] < Hh / 2;\nvar nr = Math.max(1, Math.round(thisComp.layer(\"CTRL\").effect(top ? \"Rows top\" : \"Rows bottom\")(\"Slider\")));\nvar y0 = Math.round(win[2]), y1 = Math.round(win[2] + (Hh / 2) / nr);\nvar w = we[0], edge = we[1], from = win[0], to = win[1];\nthisComp.layer(\"CTRL\").effect(top ? \"Top B\" : \"Bottom B\")(\"Color\");",
  "boxColor": "thisComp.layer(\"CTRL\").effect(\"Label bg\")(\"Color\");",
- "info": "eval(thisComp.layer(\"LIB\").text.sourceText.value);\nvar s = buildScene(); \"Touquet 2027 artist card  |  loop \" + s.tl.total.toFixed(2) + \" s  |  rows \" + P.rowsTop + \"+\" + P.rowsBottom + \"  |  floaters \" + s.floaters.length;"
+ "loop": "eval(thisComp.layer(\"LIB\").text.sourceText.value);\nbuildScene().tl.total;"
 };
   var BLOCKS = {
  "Seam Stage": {
@@ -222,10 +222,9 @@
 
     for (var hl = 0; hl < headLayers.length; hl++) headLayers[hl].moveToBeginning();
     lib.locked = true;
-    var info = comp.layers.addText("info"); info.name = "INFO"; info.guideLayer = true;
-    var itd = info.property("Source Text").value; itd.fontSize = 24; itd.fillColor = [1, 1, 1]; itd.applyStroke = true; itd.strokeColor = [0, 0, 0]; itd.strokeWidth = 4; itd.justification = ParagraphJustification.LEFT_JUSTIFY; info.property("Source Text").setValue(itd);
-    info.property("Transform").property("Position").setValue([24, 40]);
-    setExpr(info.property("Source Text"), E.info);
+    // loop length as a read-only slider on CTRL (expression-driven), nothing drawn on the canvas
+    var loopS = ctrl.property("Effects").addProperty("ADBE Slider Control"); loopS.name = "Loop length (s)";
+    setExpr(loopS.property(1), E.loop);
     comp.workAreaStart = 0; comp.workAreaDuration = 8.35;
     comp.openInViewer();
   } catch (e) { log.push("BUILD EXCEPTION: " + e.toString() + " line " + e.line); }

@@ -70,7 +70,7 @@ E = {
  "fColA": FL_READ + 'thisComp.layer("CTRL").effect(top ? "Top A" : "Bottom A")("Color");',
  "fColB": FL_READ + 'thisComp.layer("CTRL").effect(top ? "Top B" : "Bottom B")("Color");',
  "boxColor": 'thisComp.layer("CTRL").effect("Label bg")("Color");',
- "info": HEAD + 'var s = buildScene(); "Touquet 2027 artist card  |  loop " + s.tl.total.toFixed(2) + " s  |  rows " + P.rowsTop + "+" + P.rowsBottom + "  |  floaters " + s.floaters.length;',
+ "loop": HEAD + 'buildScene().tl.total;',
 }
 def word_code(src, upper):
     """Inline word lookup (no library): the word for this layer's index, or ''."""
@@ -245,10 +245,9 @@ jsx = r'''
 
     for (var hl = 0; hl < headLayers.length; hl++) headLayers[hl].moveToBeginning();
     lib.locked = true;
-    var info = comp.layers.addText("info"); info.name = "INFO"; info.guideLayer = true;
-    var itd = info.property("Source Text").value; itd.fontSize = 24; itd.fillColor = [1, 1, 1]; itd.applyStroke = true; itd.strokeColor = [0, 0, 0]; itd.strokeWidth = 4; itd.justification = ParagraphJustification.LEFT_JUSTIFY; info.property("Source Text").setValue(itd);
-    info.property("Transform").property("Position").setValue([24, 40]);
-    setExpr(info.property("Source Text"), E.info);
+    // loop length as a read-only slider on CTRL (expression-driven), nothing drawn on the canvas
+    var loopS = ctrl.property("Effects").addProperty("ADBE Slider Control"); loopS.name = "Loop length (s)";
+    setExpr(loopS.property(1), E.loop);
     comp.workAreaStart = 0; comp.workAreaDuration = 8.35;
     comp.openInViewer();
   } catch (e) { log.push("BUILD EXCEPTION: " + e.toString() + " line " + e.line); }

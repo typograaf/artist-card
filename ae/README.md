@@ -22,8 +22,9 @@ JavaScript expression engine (the script switches the project to it).
    and day words).
 4. **IMAGE**: replace the footage with the artist photo; scale and position
    it like any layer.
-5. The loop length depends on the settings; the **INFO** guide layer shows
-   it. Set the work area to that length. Playback loops with comp time.
+5. The loop length depends on the settings; the read-only **Loop length (s)**
+   slider on CTRL shows it. Set the work area to that length. Playback loops
+   with comp time.
 
 The label blocks need Avantt Bold installed (PostScript name `Avantt-Bold`).
 Frames take about a second to render: most of the cost is the expression
