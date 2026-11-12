@@ -285,6 +285,7 @@ type NumKey =
   | "holdClosed"
   | "duration"
   | "opening"
+  | "vignette"
   | "holdOpen"
   | "rowsTop"
   | "rowsBottom"
@@ -313,6 +314,7 @@ const stepDefs: StepDef[] = [
   { key: "holdClosed", label: "Hold closed", min: 0, max: 20, step: 0.1, decimals: 1, suffix: "s", container: "timingGroup" },
   { key: "duration", label: "Opening time", min: 0.1, max: 6, step: 0.1, decimals: 1, suffix: "s", container: "timingGroup", title: "One row's open / close transition; the block moves follow the same easing" },
   { key: "opening", label: "Opening %", min: 0, max: 100, step: 5, decimals: 0, container: "timingGroup", title: "How far the rows open; the edge blocks stay on top of that" },
+  { key: "vignette", label: "Vignette %", min: 0, max: 100, step: 5, decimals: 0, container: "timingGroup", title: "0 = the opening is two vertical lines, 100 = an oval (outer rows open less)" },
   { key: "holdOpen", label: "Hold open", min: 0, max: 30, step: 0.1, decimals: 1, suffix: "s", container: "timingGroup" },
   { key: "rowsTop", label: "Rows top", min: 1, max: 24, step: 1, decimals: 0, container: "rowsGroup" },
   { key: "rowsBottom", label: "Rows bottom", min: 1, max: 24, step: 1, decimals: 0, container: "rowsGroup" },

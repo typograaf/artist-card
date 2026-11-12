@@ -155,7 +155,7 @@ jsx = r'''
     var ctrl = comp.layers.addNull(); ctrl.name = "CTRL"; ctrl.enabled = false; headLayers.push(ctrl);
     function slider(name, v) { var e = ctrl.property("Effects").addProperty("ADBE Slider Control"); e.name = name; e.property(1).setValue(v); }
     function colour(name, hex) { var e = ctrl.property("Effects").addProperty("ADBE Color Control"); e.name = name; var n = parseInt(hex.slice(1), 16); e.property(1).setValue([((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]); }
-    slider("Hold closed", DEFAULTS.holdClosed); slider("Opening time", DEFAULTS.duration); slider("Opening %%", DEFAULTS.opening); slider("Hold open", DEFAULTS.holdOpen);
+    slider("Hold closed", DEFAULTS.holdClosed); slider("Opening time", DEFAULTS.duration); slider("Opening %%", DEFAULTS.opening); slider("Vignette %%", DEFAULTS.vignette); slider("Hold open", DEFAULTS.holdOpen);
     slider("Rows top", DEFAULTS.rowsTop); slider("Rows bottom", DEFAULTS.rowsBottom);
     slider("Rows stagger", DEFAULTS.stagger); slider("Irregularity %%", DEFAULTS.irregularity); slider("Shape seed", DEFAULTS.shapeSeed);
     try {
@@ -301,7 +301,7 @@ jsx = r'''
   app.endUndoGroup();
 })();
 '''
-defaults = {"holdClosed":1.5,"duration":1.5,"opening":100,"holdOpen":1.5,"rowsTop":4,"rowsBottom":4,"stagger":0.15,"irregularity":30,"shapeSeed":1,
+defaults = {"holdClosed":1.5,"duration":1.5,"opening":100,"vignette":0,"holdOpen":1.5,"rowsTop":4,"rowsBottom":4,"stagger":0.15,"irregularity":30,"shapeSeed":1,
  "blockWidth":2,"blockTravel":4,"blockSeed":4,"floatCount":9,"floatSize":4.5,"floatTravel":100,
  "colorway":0, "colors":{"topA":"#E90062","topB":"#AA0026","bottomA":"#80FFE3","bottomB":"#027370","labelBg":"#FFEFA4","labelText":"#000000"},
  "labelY":401/679,"day":"Thursday 28.08","timeStart":"20:00","timeEnd":"21:00","artist":"Chris Stussy","stage":"Main Stage",

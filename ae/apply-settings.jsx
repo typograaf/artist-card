@@ -26,7 +26,7 @@
     }
   }
   var ctrl = comp.layer("CTRL");
-  var sliders = { holdClosed: "Hold closed", duration: "Opening time", opening: "Opening %", holdOpen: "Hold open", rowsTop: "Rows top", rowsBottom: "Rows bottom",
+  var sliders = { holdClosed: "Hold closed", duration: "Opening time", opening: "Opening %", vignette: "Vignette %", holdOpen: "Hold open", rowsTop: "Rows top", rowsBottom: "Rows bottom",
     stagger: "Rows stagger", irregularity: "Irregularity %", shapeSeed: "Shape seed", blockWidth: "Block width", blockTravel: "Block travel", blockSeed: "Block seed",
     floatCount: "Floaters", floatSize: "Floaters size", floatTravel: "Floaters travel" };
   var colours = { "colors.topA": "Top A", "colors.topB": "Top B", "colors.bottomA": "Bottom A", "colors.bottomB": "Bottom B", "colors.labelBg": "Label bg", "colors.labelText": "Label text" };

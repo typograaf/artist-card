@@ -38,6 +38,8 @@ Left column:
   label block opens and closes in 1 s, one row stagger apart, on a soft
   easing). Opening % is how far the rows slide apart;
   the edge blocks stay on top of that.
+- **Vignette %** narrows the hole towards the top and bottom rows: 0 is
+  two vertical lines, 100 an oval (each row's hole scaled by sqrt(1 - y^2)).
 - **Rows top / bottom** row counts.
 - **Rows stagger** seconds between rows; **Irregularity %** extra blocks
   left standing per row and side, more towards the outer rows; **Shape

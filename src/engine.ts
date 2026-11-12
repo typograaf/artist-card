@@ -42,6 +42,7 @@ export interface Params {
   floatMoveMin: number; // s, floating block keyframe spacing
   floatMoveMax: number;
   opening: number; // 0..100, how far the rows open
+  vignette: number; // 0..100, 0 = straight opening, 100 = oval (outer rows open less)
   irregularity: number; // 0..100, extra blocks per row and side
   shapeSeed: number;
   duration: number; // s, one row's open/close transition
@@ -85,6 +86,7 @@ export const DEFAULT_PARAMS: Params = {
   floatMoveMin: 1,
   floatMoveMax: 2.5,
   opening: 100,
+  vignette: 0,
   irregularity: 30,
   shapeSeed: 1,
   duration: 1.5,
@@ -285,6 +287,7 @@ export interface RowSpec {
   phase: number; // 0..2 stripe widths
   m0: number; // stripe multiplier at the start of the opening
   anchor: number; // x (px at 1x) the pattern scales about; off-centre on purpose
+  vig: number; // 0..1 hole width factor from the vignette (1 at the seam)
   remL: number; // units, blocks left standing at the edge when fully open (static part)
   remR: number;
   edgeL: Key[]; // units, extra edge block width chain (never still)
@@ -456,6 +459,7 @@ export function buildScene(p: Params): Scene {
       phase: 0,
       m0: 1,
       anchor: 0,
+      vig: 1,
       remL: 0,
       remR: 0,
       edgeL: [],
@@ -525,6 +529,7 @@ export function buildScene(p: Params): Scene {
 
   const open = clamp01(p.opening / 100);
   const irr = clamp01(p.irregularity / 100);
+  const vig = clamp01(p.vignette / 100);
   // Opening shape: every row opens to the same width (minus the edge
   // blocks), the irregularity adds whole blocks, more towards the outer
   // rows (a hill peaking at the seam) and seeded per row and side.
@@ -538,6 +543,9 @@ export function buildScene(p: Params): Scene {
     r.m0 = r.half === p.focus ? 3 : 1;
     const yc = (r.y0 + r.y1) / 2;
     const hill = Math.abs(yc - H / 2) / (H / 2);
+    // Vignette: the hole narrows towards the top and bottom rows, from two
+    // vertical lines (0) to an oval (100): width scaled by sqrt(1 - y^2).
+    r.vig = 1 - vig * (1 - Math.sqrt(Math.max(0, 1 - hill * hill)));
     const sides: ("remL" | "remR")[] = ["remL", "remR"];
     sides.forEach((side, si) => {
       const noise = rand(p.shapeSeed, k, 10 + si);
@@ -724,7 +732,7 @@ export function rowShift(scene: Scene, r: RowSpec, t: number): number {
 /** Half-hole extent (px at 1x) of one side when the row is fully open, at time t. */
 export function rowHole(scene: Scene, r: RowSpec, side: "L" | "R", t: number): number {
   const rem = (side === "L" ? r.remL : r.remR) + evalChain(scene, side === "L" ? r.edgeL : r.edgeR, t);
-  return Math.max(0, scene.W / 2 - rem * scene.unit);
+  return Math.max(0, scene.W / 2 - rem * scene.unit) * r.vig;
 }
 
 // ---------- rendering ----------

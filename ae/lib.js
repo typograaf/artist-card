@@ -18,7 +18,7 @@ var P = {
   moveMin: 1.8, moveMax: 3.6,
   floatCount: clampInt(sl("Floaters"), 0, 12), floatSize: Math.max(0.5, sl("Floaters size")), floatTravel: Math.max(0, sl("Floaters travel")),
   floatMoveMin: 1, floatMoveMax: 2.5,
-  opening: clampN(sl("Opening %"), 0, 100), irregularity: clampN(sl("Irregularity %"), 0, 100), shapeSeed: Math.round(sl("Shape seed")),
+  opening: clampN(sl("Opening %"), 0, 100), vignette: clampN(sl("Vignette %"), 0, 100), irregularity: clampN(sl("Irregularity %"), 0, 100), shapeSeed: Math.round(sl("Shape seed")),
   duration: Math.max(0.1, sl("Opening time")), stagger: Math.max(0, sl("Rows stagger")), staggerOrder: ORDER,
   easing: [0.7, 0.1, 0.1, 0.9], holdClosed: Math.max(0, sl("Hold closed")), holdOpen: Math.max(0, sl("Hold open")),
   labelY: clampN(sl("Label Y %"), 0, 100) / 100
@@ -152,7 +152,7 @@ function buildScene() {
     var y0 = half === "top" ? (H / 2) * (i / nTop) : H / 2 + (H / 2) * ((i - nTop) / nBot);
     var y1 = half === "top" ? (H / 2) * ((i + 1) / nTop) : H / 2 + (H / 2) * ((i - nTop + 1) / nBot);
     var rank; if (p.staggerOrder === "center") rank = half === "top" ? nTop - 1 - i : i - nTop; else if (p.staggerOrder === "top") rank = i; else rank = n - 1 - i;
-    rows.push({ index: i, half: half, y0: y0, y1: y1, rank: rank, delay: 0, closeDelay: 0, phase: 0, m0: 1, anchor: 0, remL: 0, remR: 0, edgeL: [], edgeR: [], widthKeys: [], shiftKeys: [], floaters: [] });
+    rows.push({ index: i, half: half, y0: y0, y1: y1, rank: rank, delay: 0, closeDelay: 0, phase: 0, m0: 1, anchor: 0, vig: 1, remL: 0, remR: 0, edgeL: [], edgeR: [], widthKeys: [], shiftKeys: [], floaters: [] });
   }
   var maxRank = 0; for (i = 0; i < n; i++) maxRank = Math.max(maxRank, rows[i].rank);
   var span = p.stagger * maxRank;
@@ -178,7 +178,7 @@ function buildScene() {
   var moveMin = Math.max(0.2, Math.min(p.moveMin, p.moveMax)), moveMax = Math.max(moveMin, p.moveMax);
   var travelMax = Math.max(0, p.blockTravel) * UNIT, travelMin = travelMax / 4;
   var edgeHi = clampInt(p.blockWidth, 0, 12), edgeLo = Math.max(0, edgeHi - 2);
-  var open = clamp01(p.opening / 100), irr = clamp01(p.irregularity / 100);
+  var open = clamp01(p.opening / 100), irr = clamp01(p.irregularity / 100), vig = clamp01(p.vignette / 100);
   var baseUnits = Math.round(((1 - open) * (W / 2)) / UNIT);
   for (i = 0; i < n; i++) {
     var r = rows[i], k = r.index;
@@ -186,6 +186,7 @@ function buildScene() {
     r.phase = ((((k * 0.618) % 1) + rand(p.blockSeed, k, 1) * 0.6) % 1) * 2;
     r.m0 = r.half === p.focus ? 3 : 1;
     var yc = (r.y0 + r.y1) / 2, hill = Math.abs(yc - H / 2) / (H / 2);
+    r.vig = 1 - vig * (1 - Math.sqrt(Math.max(0, 1 - hill * hill)));
     r.remL = baseUnits + Math.round(irr * 4 * (0.5 * hill + 0.5 * rand(p.shapeSeed, k, 10)));
     r.remR = baseUnits + Math.round(irr * 4 * (0.5 * hill + 0.5 * rand(p.shapeSeed, k, 11)));
   }
@@ -251,7 +252,7 @@ function buildScene() {
 }
 function loopTime(scene) { var T = scene.tl.total; return T > 0 ? ((time % T) + T) % T : 0; }
 function rowProgress(scene, r, t) { return segmentProgress(t, scene.tl.tOpen + r.delay, P.duration, scene.tl.tClose + r.closeDelay, P.duration, EASE); }
-function rowHole(r, side, t) { var rem = (side === "L" ? r.remL : r.remR) + evalChain(side === "L" ? r.edgeL : r.edgeR, t); return Math.max(0, W / 2 - rem * UNIT); }
+function rowHole(r, side, t) { var rem = (side === "L" ? r.remL : r.remR) + evalChain(side === "L" ? r.edgeL : r.edgeR, t); return Math.max(0, W / 2 - rem * UNIT) * r.vig; }
 function blockProgress(c, g, n, t) { return segmentProgress(t, c.openAt + g * c.openStagger, c.openD, c.closeAt + (n - 1 - g) * c.closeStagger, c.closeD, LEASE); }
 
 // Everything one row-half layer needs, from its name "Row T03 L".
