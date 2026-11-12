@@ -317,7 +317,9 @@ function groupWords(g) {
   return splitWords(TXT[d.src], d.upper).slice(0, MAXW[g]);
 }
 function wordText(name) { var m = /^(.*) W(\d+)$/.exec(name); var ws = groupWords(m[1]); var i = parseInt(m[2], 10) - 1; return i < ws.length ? ws[i] : ""; }
-function textWidth(layerName) { try { var L = thisComp.layer(layerName); if (!String(L.text.sourceText)) return 0; return L.sourceRectAtTime(time, false).width; } catch (e) { return 0; } }
+// AE measures ink, not advances: add the left side bearing on both sides to
+// approximate the advance width the web tool and Figma use
+function textWidth(layerName) { try { var L = thisComp.layer(layerName); if (!String(L.text.sourceText)) return 0; var r = L.sourceRectAtTime(time, false); return r.width + 2 * Math.max(0, r.left); } catch (e) { return 0; } }
 // rows of a clock group in order, with their block layers
 function clockRows(clock) { var o = []; for (var g in GROUPS) if (GROUPS[g].clock === clock) o.push(g); o.sort(function (a, b) { return GROUPS[a].order - GROUPS[b].order; }); return o; }
 // Everything one block (text or box layer) needs, from the group and index.
@@ -342,7 +344,7 @@ function blockState(g, i) {
     var g_ = first + k;
     var pr = blockProgress(clock, g_, nBlocks, t);
     if (d.clock === "seam") pr = 1 - pr;
-    var tw = textWidth(g + " W" + (k + 1)) + Math.abs(-0.02 * fs) + 2 * padX;
+    var tw = textWidth(g + " W" + (k + 1)) + 2 * padX;
     ws.push(tw); rev.push(clamp01(pr)); vis.push(tw * clamp01(pr));
   }
   var rowW = 0; for (k = 0; k < n; k++) rowW += vis[k]; rowW += gap * (n - 1);
