@@ -13,7 +13,8 @@ JavaScript expression engine (the script switches the project to it).
    footage "default photo" to the open project. Running it again replaces
    that comp.
 2. **CTRL** layer: every slider of the web tool (Hold closed, Opening time,
-   Opening %, Vignette %, Hold open, Rows top / bottom, Rows stagger, Irregularity %,
+   Opening %, Vignette %, Faith %, Falloff centre (a point control: drag it
+   in the viewer), Falloff radius (px), Hold open, Rows top / bottom, Rows stagger, Irregularity %,
    Shape seed, Stagger order, Block width / travel / seed, Floaters, Floaters
    size / travel, Label Y %), the **Colourway** slider (1 to 67 locks the
    stripes to one of the Touquet sets, 0 frees the colour controls) and the

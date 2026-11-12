@@ -6,6 +6,7 @@
 // keyframe chains, so the same seeds give the same picture in both.
 var CTRL = thisComp.layer("CTRL");
 function sl(n) { try { return CTRL.effect(n)("Slider").value; } catch (e) { return 0; } }
+function pt(n, d) { try { var v = CTRL.effect(n)("Point").value; return [v[0], v[1]]; } catch (e) { return d; } }
 function colorOf(n) { try { return CTRL.effect(n)("Color").value; } catch (e) { return [1, 0, 1, 1]; } }
 function clampN(v, a, b) { return Math.max(a, Math.min(b, v)); }
 function clampInt(v, lo, hi) { return Math.max(lo, Math.min(hi, Math.round(v) || lo)); }
@@ -18,7 +19,8 @@ var P = {
   moveMin: 1.8, moveMax: 3.6,
   floatCount: clampInt(sl("Floaters"), 0, 12), floatSize: Math.max(0.5, sl("Floaters size")), floatTravel: Math.max(0, sl("Floaters travel")),
   floatMoveMin: 1, floatMoveMax: 2.5,
-  opening: clampN(sl("Opening %"), 0, 100), vignette: clampN(sl("Vignette %"), 0, 100), irregularity: clampN(sl("Irregularity %"), 0, 100), shapeSeed: Math.round(sl("Shape seed")),
+  opening: clampN(sl("Opening %"), 0, 100), vignette: clampN(sl("Vignette %"), 0, 100), faith: clampN(sl("Faith %"), 0, 100),
+  falloffX: pt("Falloff centre", [W / 2, H / 2])[0] / W, falloffY: pt("Falloff centre", [W / 2, H / 2])[1] / H, falloffR: Math.max(1, sl("Falloff radius")) / SS, irregularity: clampN(sl("Irregularity %"), 0, 100), shapeSeed: Math.round(sl("Shape seed")),
   duration: Math.max(0.1, sl("Opening time")), stagger: Math.max(0, sl("Rows stagger")), staggerOrder: ORDER,
   easing: [0.7, 0.1, 0.1, 0.9], holdClosed: Math.max(0, sl("Hold closed")), holdOpen: Math.max(0, sl("Hold open")),
   labelY: clampN(sl("Label Y %"), 0, 100) / 100
@@ -152,7 +154,7 @@ function buildScene() {
     var y0 = half === "top" ? (H / 2) * (i / nTop) : H / 2 + (H / 2) * ((i - nTop) / nBot);
     var y1 = half === "top" ? (H / 2) * ((i + 1) / nTop) : H / 2 + (H / 2) * ((i - nTop + 1) / nBot);
     var rank; if (p.staggerOrder === "center") rank = half === "top" ? nTop - 1 - i : i - nTop; else if (p.staggerOrder === "top") rank = i; else rank = n - 1 - i;
-    rows.push({ index: i, half: half, y0: y0, y1: y1, rank: rank, delay: 0, closeDelay: 0, phase: 0, m0: 1, anchor: 0, vig: 1, remL: 0, remR: 0, edgeL: [], edgeR: [], widthKeys: [], shiftKeys: [], floaters: [] });
+    rows.push({ index: i, half: half, y0: y0, y1: y1, rank: rank, delay: 0, closeDelay: 0, phase: 0, m0: 1, anchor: 0, vigL: 1, vigR: 1, remL: 0, remR: 0, edgeL: [], edgeR: [], widthKeys: [], shiftKeys: [], floaters: [] });
   }
   var maxRank = 0; for (i = 0; i < n; i++) maxRank = Math.max(maxRank, rows[i].rank);
   var span = p.stagger * maxRank;
@@ -186,7 +188,6 @@ function buildScene() {
     r.phase = ((((k * 0.618) % 1) + rand(p.blockSeed, k, 1) * 0.6) % 1) * 2;
     r.m0 = r.half === p.focus ? 3 : 1;
     var yc = (r.y0 + r.y1) / 2, hill = Math.abs(yc - H / 2) / (H / 2);
-    r.vig = 1 - vig * (1 - Math.sqrt(Math.max(0, 1 - hill * hill)));
     r.remL = baseUnits + Math.round(irr * 4 * (0.5 * hill + 0.5 * rand(p.shapeSeed, k, 10)));
     r.remR = baseUnits + Math.round(irr * 4 * (0.5 * hill + 0.5 * rand(p.shapeSeed, k, 11)));
   }
@@ -225,6 +226,15 @@ function buildScene() {
     var hosts = []; for (i = 0; i < order.length; i++) { var rr0 = order[i]; if (Math.min(W / 2 - rr0.remL * UNIT, W / 2 - rr0.remR * UNIT) > UNIT) hosts.push(rr0); }
     for (var j = 0; j < count && hosts.length; j++) floaters.push({ j: j, row: hosts[j % hosts.length], widthKeys: [] });
   }
+  // falloff circle + faith (see engine.ts)
+  var fcx = p.falloffX * W, fcy = p.falloffY * H, fR = Math.max(1, p.falloffR * SS), faith = clamp01(p.faith / 100);
+  for (i = 0; i < n; i++) {
+    var rr = rows[i], ycc = (rr.y0 + rr.y1) / 2, hw = Math.sqrt(Math.max(0, fR * fR - (ycc - fcy) * (ycc - fcy)));
+    var capL = Math.max(0, hw - (fcx - W / 2)), capR = Math.max(0, hw + (fcx - W / 2));
+    var hsL = Math.max(1, W / 2 - rr.remL * UNIT), hsR = Math.max(1, W / 2 - rr.remR * UNIT);
+    rr.vigL = faith * (1 - vig * (1 - Math.min(1, capL / hsL))) + (1 - faith) * (0.1 + 0.9 * rand(p.shapeSeed, rr.index, 20));
+    rr.vigR = faith * (1 - vig * (1 - Math.min(1, capR / hsR))) + (1 - faith) * (0.1 + 0.9 * rand(p.shapeSeed, rr.index, 21));
+  }
   var floaterChains = function (f) {
     if (f.widthKeys.length) return f;
       (function (j) {
@@ -252,7 +262,7 @@ function buildScene() {
 }
 function loopTime(scene) { var T = scene.tl.total; return T > 0 ? ((time % T) + T) % T : 0; }
 function rowProgress(scene, r, t) { return segmentProgress(t, scene.tl.tOpen + r.delay, P.duration, scene.tl.tClose + r.closeDelay, P.duration, EASE); }
-function rowHole(r, side, t) { var rem = (side === "L" ? r.remL : r.remR) + evalChain(side === "L" ? r.edgeL : r.edgeR, t); return Math.max(0, W / 2 - rem * UNIT) * r.vig; }
+function rowHole(r, side, t) { var rem = (side === "L" ? r.remL : r.remR) + evalChain(side === "L" ? r.edgeL : r.edgeR, t); return Math.max(0, W / 2 - rem * UNIT) * (side === "L" ? r.vigL : r.vigR); }
 function blockProgress(c, g, n, t) { return segmentProgress(t, c.openAt + g * c.openStagger, c.openD, c.closeAt + (n - 1 - g) * c.closeStagger, c.closeD, LEASE); }
 
 // Everything one row-half layer needs, from its name "Row T03 L".

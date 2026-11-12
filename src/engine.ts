@@ -42,7 +42,11 @@ export interface Params {
   floatMoveMin: number; // s, floating block keyframe spacing
   floatMoveMax: number;
   opening: number; // 0..100, how far the rows open
-  vignette: number; // 0..100, 0 = straight opening, 100 = oval (outer rows open less)
+  vignette: number; // 0..100, how much the hole follows the falloff circle (0 = straight opening)
+  falloffX: number; // falloff circle centre, fraction of W (0.5 = centred)
+  falloffY: number; // fraction of H
+  falloffR: number; // falloff circle radius, fraction of the short side
+  faith: number; // 0..100, 100 = the hole follows the falloff, 0 = a random width per row and side
   irregularity: number; // 0..100, extra blocks per row and side
   shapeSeed: number;
   duration: number; // s, one row's open/close transition
@@ -87,6 +91,10 @@ export const DEFAULT_PARAMS: Params = {
   floatMoveMax: 2.5,
   opening: 100,
   vignette: 0,
+  falloffX: 0.5,
+  falloffY: 0.5,
+  falloffR: 0.625,
+  faith: 100,
   irregularity: 30,
   shapeSeed: 1,
   duration: 1.5,
@@ -287,7 +295,8 @@ export interface RowSpec {
   phase: number; // 0..2 stripe widths
   m0: number; // stripe multiplier at the start of the opening
   anchor: number; // x (px at 1x) the pattern scales about; off-centre on purpose
-  vig: number; // 0..1 hole width factor from the vignette (1 at the seam)
+  vigL: number; // 0..1 hole width factor per side from the falloff and faith
+  vigR: number;
   remL: number; // units, blocks left standing at the edge when fully open (static part)
   remR: number;
   edgeL: Key[]; // units, extra edge block width chain (never still)
@@ -459,7 +468,8 @@ export function buildScene(p: Params): Scene {
       phase: 0,
       m0: 1,
       anchor: 0,
-      vig: 1,
+      vigL: 1,
+      vigR: 1,
       remL: 0,
       remR: 0,
       edgeL: [],
@@ -543,9 +553,6 @@ export function buildScene(p: Params): Scene {
     r.m0 = r.half === p.focus ? 3 : 1;
     const yc = (r.y0 + r.y1) / 2;
     const hill = Math.abs(yc - H / 2) / (H / 2);
-    // Vignette: the hole narrows towards the top and bottom rows, from two
-    // vertical lines (0) to an oval (100): width scaled by sqrt(1 - y^2).
-    r.vig = 1 - vig * (1 - Math.sqrt(Math.max(0, 1 - hill * hill)));
     const sides: ("remL" | "remR")[] = ["remL", "remR"];
     sides.forEach((side, si) => {
       const noise = rand(p.shapeSeed, k, 10 + si);
@@ -560,6 +567,24 @@ export function buildScene(p: Params): Scene {
   for (let i = nTop + 1; i < n; i++) {
     rows[i].remL = Math.max(rows[i].remL, rows[i - 1].remL);
     rows[i].remR = Math.max(rows[i].remR, rows[i - 1].remR);
+  }
+  // Falloff: a circle (centre, radius) the hole follows at Vignette 100,
+  // each row's width scaled down to the circle's chord at that row. Faith
+  // mixes that with a random width per row and side (0 = complete chaos).
+  const fcx = p.falloffX * W;
+  const fcy = p.falloffY * H;
+  const fR = Math.max(1, p.falloffR * S);
+  const faith = clamp01(p.faith / 100);
+  for (const r of rows) {
+    const yc = (r.y0 + r.y1) / 2;
+    const hw = Math.sqrt(Math.max(0, fR * fR - (yc - fcy) * (yc - fcy)));
+    const caps = { L: Math.max(0, hw - (fcx - W / 2)), R: Math.max(0, hw + (fcx - W / 2)) };
+    (["L", "R"] as const).forEach((side, si) => {
+      const holeStatic = Math.max(1, W / 2 - (side === "L" ? r.remL : r.remR) * unit);
+      const follow = 1 - vig * (1 - Math.min(1, caps[side] / holeStatic));
+      const chaos = 0.1 + 0.9 * rand(p.shapeSeed, r.index, 20 + si);
+      r[side === "L" ? "vigL" : "vigR"] = faith * follow + (1 - faith) * chaos;
+    });
   }
 
   // Block motion. The reference slit-scans show every block edge as a
@@ -732,7 +757,7 @@ export function rowShift(scene: Scene, r: RowSpec, t: number): number {
 /** Half-hole extent (px at 1x) of one side when the row is fully open, at time t. */
 export function rowHole(scene: Scene, r: RowSpec, side: "L" | "R", t: number): number {
   const rem = (side === "L" ? r.remL : r.remR) + evalChain(scene, side === "L" ? r.edgeL : r.edgeR, t);
-  return Math.max(0, scene.W / 2 - rem * scene.unit) * r.vig;
+  return Math.max(0, scene.W / 2 - rem * scene.unit) * (side === "L" ? r.vigL : r.vigR);
 }
 
 // ---------- rendering ----------

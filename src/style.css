@@ -231,6 +231,7 @@ input[type="text"].center { text-align: center; }
 #canvas.pan { cursor: grab; }
 #canvas.panning { cursor: grabbing; }
 #canvas.label-hover { cursor: ns-resize; }
+#canvas.falloff-hover { cursor: move; }
 #canvas.empty { cursor: pointer; }
 .stage.dragover #canvas { outline: 2px dashed var(--text); outline-offset: -2px; }
 

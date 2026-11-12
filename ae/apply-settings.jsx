@@ -26,7 +26,7 @@
     }
   }
   var ctrl = comp.layer("CTRL");
-  var sliders = { holdClosed: "Hold closed", duration: "Opening time", opening: "Opening %", vignette: "Vignette %", holdOpen: "Hold open", rowsTop: "Rows top", rowsBottom: "Rows bottom",
+  var sliders = { holdClosed: "Hold closed", duration: "Opening time", opening: "Opening %", vignette: "Vignette %", faith: "Faith %", holdOpen: "Hold open", rowsTop: "Rows top", rowsBottom: "Rows bottom",
     stagger: "Rows stagger", irregularity: "Irregularity %", shapeSeed: "Shape seed", blockWidth: "Block width", blockTravel: "Block travel", blockSeed: "Block seed",
     floatCount: "Floaters", floatSize: "Floaters size", floatTravel: "Floaters travel" };
   var colours = { "colors.topA": "Top A", "colors.topB": "Top B", "colors.bottomA": "Bottom A", "colors.bottomB": "Bottom B", "colors.labelBg": "Label bg", "colors.labelText": "Label text" };
@@ -40,6 +40,8 @@
       var v = obj[k];
       try {
         if (sliders[k]) { var n = parseFloat(v); if (isFinite(n)) { ctrl.effect(sliders[k]).property(1).setValue(n); applied.push(sliders[k]); } }
+        else if (k === "falloffR") { ctrl.effect("Falloff radius").property(1).setValue(parseFloat(v) * Math.min(comp.width, comp.height)); applied.push("Falloff radius"); }
+        else if (k === "falloffX" || k === "falloffY") { var fp = ctrl.effect("Falloff centre").property(1); var cur = fp.value; fp.setValue(k === "falloffX" ? [parseFloat(v) * comp.width, cur[1]] : [cur[0], parseFloat(v) * comp.height]); applied.push("Falloff centre"); }
         else if (k === "labelY") { ctrl.effect("Label Y %").property(1).setValue(parseFloat(v) * 100); applied.push("Label Y %"); }
         else if (k === "staggerOrder") { ctrl.effect("Stagger order").property(1).setValue(v === "top" ? 1 : v === "bottom" ? 2 : 3); applied.push("Stagger order"); }
         else if (colours[k]) { var hex = String(v).replace(/^#/, ""); if (hex.length === 3) hex = hex.replace(/(.)/g, "$1$1"); var num = parseInt(hex, 16); if (hex.length === 6 && isFinite(num)) { ctrl.effect(colours[k]).property(1).setValue([((num >> 16) & 255) / 255, ((num >> 8) & 255) / 255, (num & 255) / 255]); applied.push(colours[k]); } }

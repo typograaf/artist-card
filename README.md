@@ -38,8 +38,12 @@ Left column:
   label block opens and closes in 1 s, one row stagger apart, on a soft
   easing). Opening % is how far the rows slide apart;
   the edge blocks stay on top of that.
-- **Vignette %** narrows the hole towards the top and bottom rows: 0 is
-  two vertical lines, 100 an oval (each row's hole scaled by sqrt(1 - y^2)).
+- **Vignette %** how much the hole follows the falloff circle: 0 is two
+  vertical lines, 100 the circle. The small handle on the card is the
+  falloff centre (default: the middle of the canvas); drag it to move the
+  falloff, and while it is selected scroll over the card to resize the
+  circle (Escape deselects). **Faith %** 100 follows the falloff, 0 is
+  complete chaos: a random width per row and side.
 - **Rows top / bottom** row counts.
 - **Rows stagger** seconds between rows; **Irregularity %** extra blocks
   left standing per row and side, more towards the outer rows; **Shape

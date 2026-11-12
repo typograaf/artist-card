@@ -51,6 +51,7 @@ let playing = false;
 let raf = 0;
 function draw() {
   layout = render(ctx, params, scene, time, 1, image);
+  drawFalloffHandle();
 }
 function schedule() {
   syncHash();
@@ -250,6 +251,11 @@ document.addEventListener("keydown", (e) => {
   const tag = t?.tagName ?? "";
   if (t?.isContentEditable || tag === "TEXTAREA" || tag === "SELECT" || tag === "INPUT") return;
   if (e.metaKey || e.ctrlKey) return;
+  if (e.key === "Escape" && falloffSelected) {
+    falloffSelected = false;
+    schedule();
+    return;
+  }
   if (e.code === "Space" || e.key === " ") {
     if (e.repeat || tag === "BUTTON") return; // let focused buttons activate
     e.preventDefault();
@@ -306,6 +312,7 @@ type NumKey =
   | "duration"
   | "opening"
   | "vignette"
+  | "faith"
   | "holdOpen"
   | "rowsTop"
   | "rowsBottom"
@@ -334,7 +341,8 @@ const stepDefs: StepDef[] = [
   { key: "holdClosed", label: "Hold closed", min: 0, max: 20, step: 0.1, decimals: 1, suffix: "s", container: "timingGroup" },
   { key: "duration", label: "Opening time", min: 0.1, max: 6, step: 0.1, decimals: 1, suffix: "s", container: "timingGroup", title: "One row's open / close transition; the block moves follow the same easing" },
   { key: "opening", label: "Opening %", min: 0, max: 100, step: 5, decimals: 0, container: "timingGroup", title: "How far the rows open; the edge blocks stay on top of that" },
-  { key: "vignette", label: "Vignette %", min: 0, max: 100, step: 5, decimals: 0, container: "timingGroup", title: "0 = the opening is two vertical lines, 100 = an oval (outer rows open less)" },
+  { key: "vignette", label: "Vignette %", min: 0, max: 100, step: 5, decimals: 0, container: "timingGroup", title: "How much the hole follows the falloff circle on the preview: 0 = two vertical lines, 100 = the circle" },
+  { key: "faith", label: "Faith %", min: 0, max: 100, step: 5, decimals: 0, container: "timingGroup", title: "100 = the hole follows the falloff, 0 = complete chaos (a random width per row and side)" },
   { key: "holdOpen", label: "Hold open", min: 0, max: 30, step: 0.1, decimals: 1, suffix: "s", container: "timingGroup" },
   { key: "rowsTop", label: "Rows top", min: 1, max: 24, step: 1, decimals: 0, container: "rowsGroup" },
   { key: "rowsBottom", label: "Rows bottom", min: 1, max: 24, step: 1, decimals: 0, container: "rowsGroup" },
@@ -653,7 +661,7 @@ function overArtist(x: number, y: number): boolean {
   const r = layout.artistRect;
   return !!r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
 }
-type DragMode = "none" | "label" | "pan";
+type DragMode = "none" | "label" | "pan" | "falloff";
 let drag: DragMode = "none";
 let dragMoved = false;
 let lastX = 0;
@@ -662,7 +670,10 @@ canvas.addEventListener("pointerdown", (e) => {
   if (e.button !== 0) return;
   const pt = canvasPoint(e);
   if (!pt) return;
-  drag = overArtist(pt.x, pt.y) ? "label" : image ? "pan" : "none";
+  const wasSelected = falloffSelected;
+  falloffSelected = overFalloff(pt.x, pt.y, pt.k);
+  drag = falloffSelected ? "falloff" : overArtist(pt.x, pt.y) ? "label" : image ? "pan" : "none";
+  if (wasSelected !== falloffSelected) schedule();
   dragMoved = false;
   lastX = e.clientX;
   lastY = e.clientY;
@@ -672,9 +683,11 @@ canvas.addEventListener("pointermove", (e) => {
   const pt = canvasPoint(e);
   if (!pt) return;
   if (drag === "none") {
-    const over = overArtist(pt.x, pt.y);
+    const overF = overFalloff(pt.x, pt.y, pt.k);
+    const over = !overF && overArtist(pt.x, pt.y);
+    canvas.classList.toggle("falloff-hover", overF);
     canvas.classList.toggle("label-hover", over);
-    canvas.classList.toggle("pan", !over && !!image);
+    canvas.classList.toggle("pan", !overF && !over && !!image);
     return;
   }
   const dx = (e.clientX - lastX) * pt.k;
@@ -683,7 +696,12 @@ canvas.addEventListener("pointermove", (e) => {
   dragMoved = true;
   lastX = e.clientX;
   lastY = e.clientY;
-  if (drag === "label") {
+  if (drag === "falloff") {
+    params.falloffX = clamp(params.falloffX + dx / canvas.width, 0, 1);
+    params.falloffY = clamp(params.falloffY + dy / canvas.height, 0, 1);
+    rebuild();
+    return;
+  } else if (drag === "label") {
     params.labelY = clamp(params.labelY + dy / canvas.height, 0, 1);
   } else if (image) {
     canvas.classList.add("panning");
@@ -702,8 +720,42 @@ for (const ev of ["pointerup", "pointercancel"]) {
   });
 }
 canvas.addEventListener("pointerleave", () => {
-  canvas.classList.remove("label-hover", "pan");
+  canvas.classList.remove("label-hover", "pan", "falloff-hover");
 });
+
+// The falloff handle: a small circle at the falloff centre, drag it to move
+// the falloff; while it is selected, scrolling over the card resizes the
+// falloff circle (shown as a thin outline) instead of zooming the photo.
+let falloffSelected = false;
+const HANDLE_R = 6; // css px
+function overFalloff(x: number, y: number, k: number): boolean {
+  return Math.hypot(x - params.falloffX * canvas.width, y - params.falloffY * canvas.height) <= (HANDLE_R + 4) * k;
+}
+function drawFalloffHandle() {
+  const rect = canvas.getBoundingClientRect();
+  const k = rect.width ? canvas.width / rect.width : 2;
+  const x = params.falloffX * canvas.width;
+  const y = params.falloffY * canvas.height;
+  ctx.save();
+  ctx.lineWidth = k;
+  if (falloffSelected) {
+    ctx.beginPath();
+    ctx.arc(x, y, Math.max(1, params.falloffR * scene.S), 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(0,0,0,0.35)";
+    ctx.lineWidth = 3 * k;
+    ctx.stroke();
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = k;
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.arc(x, y, HANDLE_R * k, 0, Math.PI * 2);
+  ctx.fillStyle = falloffSelected ? "#ffffff" : "rgba(255,255,255,0.85)";
+  ctx.fill();
+  ctx.strokeStyle = "#737373";
+  ctx.stroke();
+  ctx.restore();
+}
 canvas.addEventListener("click", () => {
   if (dragMoved) {
     dragMoved = false;
@@ -737,6 +789,11 @@ previewEl.addEventListener(
   (e) => {
     e.preventDefault();
     const overCanvas = e.target === canvas;
+    if (overCanvas && falloffSelected) {
+      params.falloffR = clamp(params.falloffR * Math.exp(-e.deltaY * 0.002), 0.05, 4);
+      rebuild();
+      return;
+    }
     if (overCanvas && image) {
       const pt = canvasPoint(e);
       if (pt) zoomImageAt(pt.x, pt.y, Math.exp(-e.deltaY * 0.002));
@@ -791,6 +848,17 @@ function applySettings(str: string): boolean {
       params[k] = clamp(v, -1, 1);
       applied++;
     }
+  }
+  for (const k of ["falloffX", "falloffY", "labelY"] as const) {
+    const v = obj[k];
+    if (typeof v === "number" && Number.isFinite(v)) {
+      params[k] = clamp(v, 0, 1);
+      applied++;
+    }
+  }
+  if (typeof obj.falloffR === "number" && Number.isFinite(obj.falloffR)) {
+    params.falloffR = clamp(obj.falloffR, 0.05, 4);
+    applied++;
   }
   if (typeof obj.imageZoom === "number" && Number.isFinite(obj.imageZoom)) {
     params.imageZoom = clamp(obj.imageZoom, 1, 6);
