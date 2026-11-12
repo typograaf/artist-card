@@ -22,7 +22,10 @@ JavaScript expression engine (the script switches the project to it).
    and day words).
 4. **IMAGE**: replace the footage with the artist photo; scale and position
    it like any layer.
-5. The loop length depends on the settings; the read-only **Loop length (s)**
+5. **apply-settings.jsx** (File > Scripts > Run Script File) asks for a tool
+   link or the Copy Settings text and sets every slider, colour, text and the
+   photo zoom / position in one go.
+6. The loop length depends on the settings; the read-only **Loop length (s)**
    slider on CTRL shows it. Set the work area to that length. Playback loops
    with comp time.
 
