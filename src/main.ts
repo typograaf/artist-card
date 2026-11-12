@@ -93,11 +93,21 @@ function syncHash() {
     const h = serializeHash();
     if (h === lastHash) return;
     lastHash = h;
-    history.replaceState(null, "", h ? `#${h}` : location.pathname + location.search);
+    try {
+      history.replaceState(null, "", h ? `#${h}` : location.pathname + location.search);
+    } catch {
+      // sandboxed frames (a Figma code layer) may refuse to touch the URL
+    }
   }, 150);
 }
+// Inside a Figma code layer there is no address bar and nobody to press play:
+// the build made by .figma/make sets VITE_FIGMA, which starts the loop on its
+// own and falls back to these settings when the URL carries none.
+const FIGMA_LAYER = Boolean(import.meta.env.VITE_FIGMA);
+const FIGMA_SETTINGS =
+  "floatCount=9&floatSize=4.5&colors.topA=%23E90062&colors.topB=%23AA0026&colors.bottomA=%2380FFE3&colors.bottomB=%23027370&imageZoom=1.5526&imageX=-0.3658&imageY=-0.1703";
 function readHash(): boolean {
-  const h = location.hash.replace(/^#/, "");
+  const h = location.hash.replace(/^#/, "") || (FIGMA_LAYER ? FIGMA_SETTINGS : "");
   if (!h) return false;
   const q = new URLSearchParams(h);
   const obj: Record<string, unknown> = {};
@@ -914,3 +924,4 @@ window.addEventListener("hashchange", () => {
 });
 document.fonts.load('700 100px "Avantt"').catch(() => undefined);
 document.fonts.ready.then(() => schedule());
+if (FIGMA_LAYER) setPlaying(true);

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export VITE_FIGMA=1
+exec npx vite --port "$PORT" --host "${FIGMA_DEV_SERVER_HOST:-0.0.0.0}" --strictPort
