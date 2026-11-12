@@ -140,6 +140,8 @@ function splitWords(s, upper) {
   for (var i = 0; i < a.length; i++) if (a[i]) o.push(a[i]);
   return o;
 }
+// the time block: "20:00 \u2014 21:00", or whichever end is filled in
+function timeLabel() { var o = []; if (TXT.timeStart.replace(/\s/g, "")) o.push(TXT.timeStart.replace(/^\s+|\s+$/g, "")); if (TXT.timeEnd.replace(/\s/g, "")) o.push(TXT.timeEnd.replace(/^\s+|\s+$/g, "")); return o.join(" \u2014 "); }
 var TXT = { day: inputText("INPUT Day"), timeStart: inputText("INPUT Time start"), timeEnd: inputText("INPUT Time end"), artist: inputText("INPUT Artist"), stage: inputText("INPUT Stage") };
 
 // ---- scene ----
@@ -160,7 +162,7 @@ function buildScene() {
   var wordsOf = function (s) { return splitWords(s, false).length; };
   var bottomRow = rows[n - 1], bottomDelay = p.stagger * bottomRow.rank, bottomCloseDelay = span - bottomDelay;
   var seamBlocks = wordsOf(TXT.stage) + wordsOf(TXT.day);
-  var artistBlocks = (TXT.timeStart.replace(/\s/g, "") ? 1 : 0) + (TXT.timeEnd.replace(/\s/g, "") ? 1 : 0) + wordsOf(TXT.artist) + wordsOf(TXT.stage);
+  var artistBlocks = (timeLabel() ? 1 : 0) + wordsOf(TXT.artist) + wordsOf(TXT.stage);
   var seamDelay = Math.min(p.stagger * rows[nTop - 1].rank, p.stagger * (rows[nTop] ? rows[nTop].rank : Infinity));
   var seamOpenAt = tOpen + seamDelay;
   var labelD = LABEL_DURATION, labelStagger = p.stagger;
@@ -310,10 +312,10 @@ var GROUPS = {
   "Artist": { style: STYLE_BIG, upper: false, src: "artist", clock: "artist", order: 1 },
   "Stage": { style: STYLE_SMALL, upper: true, src: "stage", clock: "artist", order: 2 }
 };
-var MAXW = { "Seam Stage": 3, "Seam Day": 3, "Time": 2, "Artist": 4, "Stage": 3 };
+var MAXW = { "Seam Stage": 3, "Seam Day": 3, "Time": 1, "Artist": 4, "Stage": 3 };
 function groupWords(g) {
   var d = GROUPS[g];
-  if (d.src === "time") { var o = []; if (TXT.timeStart.replace(/\s/g, "")) o.push(TXT.timeStart.replace(/^\s+|\s+$/g, "")); if (TXT.timeEnd.replace(/\s/g, "")) o.push(TXT.timeEnd.replace(/^\s+|\s+$/g, "")); return o.slice(0, MAXW[g]); }
+  if (d.src === "time") { var tlb = timeLabel(); return tlb ? [tlb] : []; }
   return splitWords(TXT[d.src], d.upper).slice(0, MAXW[g]);
 }
 function wordText(name) { var m = /^(.*) W(\d+)$/.exec(name); var ws = groupWords(m[1]); var i = parseInt(m[2], 10) - 1; return i < ws.length ? ws[i] : ""; }

@@ -15,11 +15,13 @@ JavaScript expression engine (the script switches the project to it).
 2. **CTRL** layer: every slider of the web tool (Hold closed, Opening time,
    Opening %, Hold open, Rows top / bottom, Rows stagger, Irregularity %,
    Shape seed, Stagger order, Block width / travel / seed, Floaters, Floaters
-   size / travel, Label Y %) and the colour controls (Top A/B, Bottom A/B,
-   Label bg, Label text). Same numbers as the tool give the same picture.
+   size / travel, Label Y %), the **Colourway** slider (1 to 67 locks the
+   stripes to one of the Touquet sets, 0 frees the colour controls) and the
+   colour controls (Top A/B, Bottom A/B, Label bg, Label text). Same numbers
+   as the tool give the same picture.
 3. **INPUT** layers (hidden): type the Day, Time start, Time end, Artist and
    Stage. Every word becomes its own block (up to 4 artist words, 3 stage
-   and day words).
+   and day words); the time is one block, start and end joined by a dash.
 4. **IMAGE**: replace the footage with the artist photo; scale and position
    it like any layer.
 5. **apply-settings.jsx** (File > Scripts > Run Script File) asks for a tool

@@ -27,9 +27,15 @@ for st in STYLES.values():
     st["capH"] = CAP * st["fs"]; st["h"] = st["padTop"] + st["capH"] + st["padBottom"]
 GROUPS = [  # name, max words, style, upper, source
   ("Seam Stage", 3, "big", False, "stage"), ("Seam Day", 3, "small", True, "day"),
-  ("Time", 2, "tiny", False, "time"), ("Artist", 4, "big", False, "artist"), ("Stage", 3, "small", True, "stage"),
+  ("Time", 1, "tiny", False, "time"), ("Artist", 4, "big", False, "artist"), ("Stage", 3, "small", True, "stage"),
 ]
 def js(s): return json.dumps(s)
+# the 67 locked colourways, read from src/engine.ts so the two tools never drift
+_eng = (HERE.parent / "src" / "engine.ts").read_text()
+_tbl = _eng[_eng.index("export const COLORWAYS"):]; _tbl = _tbl[:_tbl.index("];")]
+def _rgb(h): n = int(h[1:], 16); return [round(((n >> 16) & 255) / 255, 4), round(((n >> 8) & 255) / 255, 4), round((n & 255) / 255, 4)]
+COLORWAYS = [[_rgb(h) for h in w] for w in re.findall(r'\["(#[0-9A-F]{6})", "(#[0-9A-F]{6})", "(#[0-9A-F]{6})", "(#[0-9A-F]{6})"\]', _tbl)]
+assert len(COLORWAYS) == 67, len(COLORWAYS)
 
 ROW_GUARD = ('var m = /Row ([TB])(\\d+)/.exec(thisLayer.name);\n'
              'var cnt = thisComp.layer("CTRL").effect(m[1] == "T" ? "Rows top" : "Rows bottom")("Slider");\n'
@@ -75,9 +81,10 @@ E = {
 def word_code(src, upper):
     """Inline word lookup (no library): the word for this layer's index, or ''."""
     if src == "time":
-        get = ('var ws = [];\n'
-               'var a = String(thisComp.layer("INPUT Time start").text.sourceText).replace(/^\\s+|\\s+$/g, ""); if (a) ws.push(a);\n'
-               'var b = String(thisComp.layer("INPUT Time end").text.sourceText).replace(/^\\s+|\\s+$/g, ""); if (b) ws.push(b);\n')
+        get = ('var ws = [], tp = [];\n'
+               'var a = String(thisComp.layer("INPUT Time start").text.sourceText).replace(/^\\s+|\\s+$/g, ""); if (a) tp.push(a);\n'
+               'var b = String(thisComp.layer("INPUT Time end").text.sourceText).replace(/^\\s+|\\s+$/g, ""); if (b) tp.push(b);\n'
+               'if (tp.length) ws.push(tp.join(" \\u2014 "));\n')
     else:
         inp = {"stage": "INPUT Stage", "day": "INPUT Day", "artist": "INPUT Artist"}[src]
         get = ('var ws = [], raw = String(thisComp.layer(%s).text.sourceText).replace(/^\\s+|\\s+$/g, "").split(/\\s+/);\n'
@@ -116,6 +123,7 @@ jsx = r'''
   var BLOCKS = %(blocks)s;
   var GROUPS = %(groups)s;
   var DEFAULTS = %(defaults)s;
+  var COLORWAYS = %(colorways)s; // [r, g, b] x 4 per colourway: top A, top B, bottom A, bottom B
   var IMAGE_PATH = %(image)s;
   var DIAG_DIR = %(diagdir)s || Folder.temp.fsName; // rendered diagnostics and check frames land here
   var COMP_NAME = "Artist card — tool v2";
@@ -160,7 +168,14 @@ jsx = r'''
     } catch (e) { log.push("dropdown: " + e.toString()); }
     slider("Block width", DEFAULTS.blockWidth); slider("Block travel", DEFAULTS.blockTravel); slider("Block seed", DEFAULTS.blockSeed);
     slider("Floaters", DEFAULTS.floatCount); slider("Floaters size", DEFAULTS.floatSize); slider("Floaters travel", DEFAULTS.floatTravel);
+    // Colourway 1..67 locks the four stripe colours to a Touquet set; 0 frees the colour controls below
+    slider("Colourway", DEFAULTS.colorway);
     colour("Top A", DEFAULTS.colors.topA); colour("Top B", DEFAULTS.colors.topB); colour("Bottom A", DEFAULTS.colors.bottomA); colour("Bottom B", DEFAULTS.colors.bottomB);
+    var cwNames = ["Top A", "Top B", "Bottom A", "Bottom B"];
+    for (var cwi = 0; cwi < 4; cwi++) {
+      var col = "["; for (var cwj = 0; cwj < COLORWAYS.length; cwj++) col += (cwj ? "," : "") + "[" + COLORWAYS[cwj][cwi].join(",") + "]"; col += "]";
+      setExpr(ctrl.effect(cwNames[cwi]).property(1), 'var T = ' + col + ';\nvar n = Math.round(effect("Colourway")("Slider"));\n(n >= 1 && n <= T.length) ? [T[n - 1][0], T[n - 1][1], T[n - 1][2], 1] : value;');
+    }
     colour("Label bg", DEFAULTS.colors.labelBg); colour("Label text", DEFAULTS.colors.labelText);
     slider("Label Y %%", DEFAULTS.labelY * 100);
 
@@ -288,12 +303,12 @@ jsx = r'''
 '''
 defaults = {"holdClosed":1.5,"duration":1.5,"opening":100,"holdOpen":1.5,"rowsTop":4,"rowsBottom":4,"stagger":0.15,"irregularity":30,"shapeSeed":1,
  "blockWidth":2,"blockTravel":4,"blockSeed":4,"floatCount":9,"floatSize":4.5,"floatTravel":100,
- "colors":{"topA":"#E90062","topB":"#AA0026","bottomA":"#80FFE3","bottomB":"#027370","labelBg":"#FFEFA4","labelText":"#000000"},
+ "colorway":0, "colors":{"topA":"#E90062","topB":"#AA0026","bottomA":"#80FFE3","bottomB":"#027370","labelBg":"#FFEFA4","labelText":"#000000"},
  "labelY":401/679,"day":"Thursday 28.08","timeStart":"20:00","timeEnd":"21:00","artist":"Chris Stussy","stage":"Main Stage",
  "imageZoom":1.5526,"imageX":-0.3658,"imageY":-0.1703}
 import sys
 diagdir = sys.argv[1] if len(sys.argv) > 1 else ""
-out = jsx % {"lib": js(LIB), "exprs": json.dumps(E, indent=1), "blocks": json.dumps(BLOCKS, indent=1), "groups": json.dumps(GROUPS), "defaults": json.dumps(defaults),
+out = jsx % {"lib": js(LIB), "exprs": json.dumps(E, indent=1), "blocks": json.dumps(BLOCKS, indent=1), "groups": json.dumps(GROUPS), "defaults": json.dumps(defaults), "colorways": json.dumps(COLORWAYS),
              "image": js(str(HERE.parent / "public" / "default.jpg")), "W": W, "H": H,
              "diagdir": js(diagdir)}
 (HERE / "build.jsx").write_text(out)
