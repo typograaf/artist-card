@@ -94,6 +94,7 @@ function syncHash() {
     const h = serializeHash();
     if (h === lastHash) return;
     lastHash = h;
+    storeFigmaSettings(h);
     try {
       history.replaceState(null, "", h ? `#${h}` : location.pathname + location.search);
     } catch {
@@ -107,8 +108,27 @@ function syncHash() {
 const FIGMA_LAYER = Boolean(import.meta.env.VITE_FIGMA);
 const FIGMA_SETTINGS =
   "floatCount=4&floatSize=5&vignette=100&shapeSeed=6&colors.topA=%23FF63F4&colors.topB=%23ED00A5&colors.bottomA=%2370FFDF&colors.bottomB=%231625F8&imageZoom=1.4034&imageX=-0.1337&imageY=-0.1188";
+// A code layer cannot keep its settings in the URL either, so they are kept
+// in the browser's storage and picked up again when the preview restarts.
+const FIGMA_STORE = "artist-card.settings";
+function storeFigmaSettings(h: string) {
+  if (!FIGMA_LAYER) return;
+  try {
+    localStorage.setItem(FIGMA_STORE, h);
+  } catch {
+    // storage can be blocked in a sandboxed frame
+  }
+}
+function storedFigmaSettings(): string {
+  if (!FIGMA_LAYER) return "";
+  try {
+    return localStorage.getItem(FIGMA_STORE) ?? FIGMA_SETTINGS;
+  } catch {
+    return FIGMA_SETTINGS;
+  }
+}
 function readHash(): boolean {
-  const h = location.hash.replace(/^#/, "") || (FIGMA_LAYER ? FIGMA_SETTINGS : "");
+  const h = location.hash.replace(/^#/, "") || storedFigmaSettings();
   if (!h) return false;
   const q = new URLSearchParams(h);
   const obj: Record<string, unknown> = {};
