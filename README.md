@@ -52,7 +52,8 @@ Right column:
 - **Floaters** number of floating blocks spread over the open rows (0 =
   none), **Floaters size** largest in units (smallest is half), **Floaters
   travel** largest sideways step in px on the 1080 canvas. They show their
-  own stripes, grow, shrink to nothing and back, and drift.
+  own stripes, grow, shrink to nothing and back, and drift; they trail the
+  opening a beat behind the hole edge and are gone once a row is fully open.
 - **Top / Bottom colours** click a swatch for a picker, hover it and press
   Cmd+V to paste a hex (with or without #), `?` picks one of the thirteen
   Touquet pairs.

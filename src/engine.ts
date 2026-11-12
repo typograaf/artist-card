@@ -903,15 +903,20 @@ export function render(
     // each half carries its pattern along with its hole edge
     drawStripes(ctx, origin - holeL, 0, left, y0, h, w, r.phase, cA, cB);
     drawStripes(ctx, origin + holeR, right, W, y0, h, w, r.phase, cA, cB);
-    if (r.floaters.length && right - left > 1) {
+    // Floaters trail the opening: they travel outward a beat behind the
+    // hole edge and shrink away as the row reaches fully open (back again
+    // the same way when it closes).
+    const trail = Math.sqrt(Math.max(0, 1 - pr));
+    if (r.floaters.length && right - left > 1 && trail > 0.02) {
+      const lag = rowProgress(scene, p, r, t - 0.15);
       ctx.save();
       ctx.beginPath();
       ctx.rect(left, y0, right - left, h);
       ctx.clip();
       for (const f of r.floaters) {
-        const fw = evalChain(scene, f.widthKeys, t) * scale;
+        const fw = evalChain(scene, f.widthKeys, t) * scale * trail;
         if (fw < 1) continue;
-        const fx = cx + (f.x0 + evalChain(scene, f.shiftKeys, t)) * scale;
+        const fx = cx + (f.x0 * lag + evalChain(scene, f.shiftKeys, t)) * scale;
         const sm = evalChain(scene, f.stripeKeys, t);
         const sw = Math.max(1, unit * sm);
         const so = fx + evalChain(scene, f.stripeShift, t) * scale;
