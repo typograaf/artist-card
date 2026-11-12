@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Touquet 2027</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Ccircle cx=%278%27 cy=%278%27 r=%277%27 fill=%27white%27/%3E%3C/svg%3E" />
+    <script type="module" crossorigin src="./assets/index-BUAf39fC.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-DvP-sXIg.css">
+  </head>
+  <body>
+    <input type="file" id="fileInput" accept="image/*" hidden />
+
+    <div id="app">
+      <aside class="panel" id="sidebar">
+        <div class="cols">
+          <div class="col">
+            <section class="group titled">
+              <span class="title">Format</span>
+              <div class="hug" id="formatSeg">
+                <button type="button" class="btn active" data-format="4:5" title="1080 x 1350">4:5</button>
+                <button type="button" class="btn" data-format="1:1" title="1080 x 1080">1:1</button>
+                <button type="button" class="btn" data-format="16:9" title="1920 x 1080">16:9</button>
+                <button type="button" class="btn" data-format="9:16" title="1080 x 1920">9:16</button>
+              </div>
+            </section>
+
+            <section class="group">
+              <label class="row field"><span class="lbl">Day</span><input type="text" id="dayText" spellcheck="false" /></label>
+              <div class="row field">
+                <span class="lbl">Time</span>
+                <div class="pair">
+                  <input type="text" id="timeStartText" class="w45 center" spellcheck="false" />
+                  <input type="text" id="timeEndText" class="w45 center" spellcheck="false" />
+                </div>
+              </div>
+              <label class="row field"><span class="lbl">Artist</span><input type="text" id="artistText" spellcheck="false" /></label>
+              <label class="row field"><span class="lbl">Stage</span><input type="text" id="stageText" spellcheck="false" /></label>
+              <div class="row field">
+                <span class="lbl">Image</span>
+                <div class="seg">
+                  <button type="button" class="btn" id="imageLoadBtn" title="Or drop an image on the preview">Load</button>
+                  <button type="button" class="btn" id="imageRemoveBtn" disabled>Remove</button>
+                </div>
+              </div>
+            </section>
+
+            <section class="group" id="timingGroup"></section>
+
+            <section class="group" id="rowsGroup"></section>
+
+            <section class="group" id="shapeGroup">
+              <div class="seg" id="orderSeg">
+                <button type="button" class="btn" data-order="top">Top</button>
+                <button type="button" class="btn" data-order="bottom">Bottom</button>
+                <button type="button" class="btn active" data-order="center">Centre</button>
+              </div>
+            </section>
+          </div>
+
+          <div class="col right">
+            <div class="stack">
+              <section class="group" id="blocksGroup"></section>
+
+              <section class="group" id="floatGroup"></section>
+
+              <section class="group" id="colorGroup"></section>
+
+              <section class="group">
+                <div class="seg">
+                  <button type="button" class="btn" id="copySettingsBtn">Copy Settings</button>
+                  <button type="button" class="btn" id="pasteSettingsBtn">Paste Settings</button>
+                </div>
+                <div class="seg">
+                  <button type="button" class="btn" id="exportMp4Btn" title="One full loop as H.264 MP4, 2160 wide at 60 fps">Export MP4</button>
+                  <button type="button" class="btn" id="exportPngBtn" title="The frame shown in the preview, at 2x">Export PNG</button>
+                </div>
+              </section>
+            </div>
+            <footer class="foot">
+              <span class="lbl">Motion Tool</span>
+              <span class="lbl">Touquet 2027</span>
+            </footer>
+          </div>
+        </div>
+      </aside>
+
+      <main class="preview" id="preview">
+        <div class="stage" id="stage">
+          <canvas id="canvas" width="1080" height="1350"></canvas>
+        </div>
+        <div class="timeline" id="timeline">
+          <button type="button" class="frame" id="frameBtn" title="Play / pause (Space). Arrow keys step a frame, Shift+arrow ten, Home restarts">0</button>
+          <div class="ticks" id="ticks"></div>
+        </div>
+      </main>
+    </div>
+
+  </body>
+</html>
