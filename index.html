@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Touquet 2027</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Ccircle cx=%278%27 cy=%278%27 r=%277%27 fill=%27white%27/%3E%3C/svg%3E" />
+    <script type="module" crossorigin src="./assets/index-Cr0ATWdG.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-9Wprlpm0.css">
+  </head>
+  <body>
+    <input type="file" id="fileInput" accept="image/*,video/mp4,video/quicktime,video/webm,.touquet" hidden />
+    <!-- no accept filter: macOS has no type for .touquet, so a filter greys the files out -->
+    <input type="file" id="touquetInput" hidden />
+    <input type="file" id="audioInput" accept="audio/mpeg,.mp3" hidden />
+
+    <div id="app">
+      <main class="preview" id="preview">
+        <div class="timeline wave" id="wave" hidden>
+          <button type="button" class="frame" id="waveTime" title="Where the music starts; drag the strip to move it">0:00</button>
+          <div class="ticks" id="waveTicks"></div>
+        </div>
+        <div class="stage" id="stage">
+          <canvas id="canvas" width="1080" height="1350"></canvas>
+        </div>
+        <div class="timeline" id="timeline">
+          <button type="button" class="frame" id="frameBtn" title="Play / pause (Space); the ? in the corner lists every shortcut">0</button>
+          <div class="ticks" id="ticks"></div>
+        </div>
+        <div class="help" id="help">
+          <div class="help-panel" id="helpPanel"></div>
+          <button type="button" class="btn help-btn" id="helpBtn" aria-label="Keyboard shortcuts" title="Shortcuts (?)">?</button>
+        </div>
+      </main>
+
+      <aside class="panel" id="sidebar">
+        <div class="titles">
+          <section class="group titled">
+            <span class="title">Format</span>
+            <div class="hug" id="formatSeg">
+              <button type="button" class="btn active" data-format="4:5" title="1080 x 1350">4:5</button>
+              <button type="button" class="btn" data-format="1:1" title="1080 x 1080">1:1</button>
+              <button type="button" class="btn" data-format="9:16" title="1080 x 1920">9:16</button>
+            </div>
+          </section>
+          <section class="group titled right">
+            <span class="title">Layout Preset</span>
+            <div class="hug" id="layoutSeg">
+              <button type="button" class="btn active" data-preset="1" title="Reveal: the stripes open and close around the labels">1</button>
+              <button type="button" class="btn" data-preset="2" title="Infos Pratiques: side blocks, title at the top, sentence at the bottom">2</button>
+              <button type="button" class="btn" data-preset="3" title="Full blocks: the stripes held open around the photo, logo at the bottom">3</button>
+              <button type="button" class="btn" data-preset="4" title="App TMB26: one strip at the bottom, title and sentence at the top">4</button>
+              <button type="button" class="btn" data-preset="5" title="Paragraph: no photo, a title and a wrapped text on a colour; rows or full page">5</button>
+            </div>
+          </section>
+        </div>
+
+        <section class="group" id="fieldsGroup">
+          <label class="row field tall" id="titleRow"><span class="lbl">Title</span><textarea id="titleText" rows="1" spellcheck="false" title="A big title for posters without an artist; Enter starts a new row of blocks"></textarea></label>
+          <label class="row field" id="dayRow"><span class="lbl">Day</span><input type="text" id="dayText" spellcheck="false" /></label>
+          <div class="row field" id="timeRow">
+            <span class="lbl">Time</span>
+            <div class="pair">
+              <input type="text" id="timeStartText" spellcheck="false" />
+              <input type="text" id="timeEndText" spellcheck="false" />
+            </div>
+          </div>
+          <div class="row field tall" id="artistRow">
+            <span class="lbl" id="artistLbl">Artist</span>
+            <div class="with-btn">
+              <textarea id="artistText" rows="1" spellcheck="false" title="Enter puts the rest of the name on a new row of blocks"></textarea>
+              <button type="button" class="btn w20 tall" id="artist2AddBtn" title="Add a second artist (B2B)">+</button>
+            </div>
+          </div>
+          <div class="row field tall" id="artist2Row" hidden>
+            <span class="lbl">Artist 2</span>
+            <div class="with-btn">
+              <textarea id="artist2Text" rows="1" spellcheck="false" title="Enter puts the rest of the name on a new row of blocks"></textarea>
+              <button type="button" class="btn w20 tall" id="artist2RemoveBtn" title="Remove the second artist">&ndash;</button>
+            </div>
+          </div>
+          <label class="row field" id="stageRow"><span class="lbl">Stage</span><input type="text" id="stageText" spellcheck="false" /></label>
+          <div class="row field tall" id="infoRow">
+            <span class="lbl">Info</span>
+            <div class="with-btn para">
+              <textarea id="infoText" rows="1" spellcheck="false"></textarea>
+              <div class="vstep" title="Type size of this block">
+                <button type="button" class="btn w20" id="infoSizeDown" title="Smaller">&ndash;</button>
+                <button type="button" class="btn w20 grow" id="infoSizeBtn" title="Click: S, M, L">S</button>
+                <button type="button" class="btn w20" id="infoSizeUp" title="Larger">+</button>
+              </div>
+              <button type="button" class="btn w20 tall" id="infoAddBtn" title="Add another info block (up to four)">+</button>
+            </div>
+          </div>
+          <div class="row field tall" id="info2Row" hidden>
+            <span class="lbl">Info 2</span>
+            <div class="with-btn para">
+              <textarea id="info2Text" rows="1" spellcheck="false"></textarea>
+              <div class="vstep" title="Type size of this block">
+                <button type="button" class="btn w20" id="info2SizeDown" title="Smaller">&ndash;</button>
+                <button type="button" class="btn w20 grow" id="info2SizeBtn" title="Click: S, M, L">S</button>
+                <button type="button" class="btn w20" id="info2SizeUp" title="Larger">+</button>
+              </div>
+              <button type="button" class="btn w20 tall" id="info2RemoveBtn" title="Remove this info block">&ndash;</button>
+            </div>
+          </div>
+          <div class="row field tall" id="info3Row" hidden>
+            <span class="lbl">Info 3</span>
+            <div class="with-btn para">
+              <textarea id="info3Text" rows="1" spellcheck="false"></textarea>
+              <div class="vstep" title="Type size of this block">
+                <button type="button" class="btn w20" id="info3SizeDown" title="Smaller">&ndash;</button>
+                <button type="button" class="btn w20 grow" id="info3SizeBtn" title="Click: S, M, L">S</button>
+                <button type="button" class="btn w20" id="info3SizeUp" title="Larger">+</button>
+              </div>
+              <button type="button" class="btn w20 tall" id="info3RemoveBtn" title="Remove this info block">&ndash;</button>
+            </div>
+          </div>
+          <div class="row field tall" id="info4Row" hidden>
+            <span class="lbl">Info 4</span>
+            <div class="with-btn para">
+              <textarea id="info4Text" rows="1" spellcheck="false"></textarea>
+              <div class="vstep" title="Type size of this block">
+                <button type="button" class="btn w20" id="info4SizeDown" title="Smaller">&ndash;</button>
+                <button type="button" class="btn w20 grow" id="info4SizeBtn" title="Click: S, M, L">S</button>
+                <button type="button" class="btn w20" id="info4SizeUp" title="Larger">+</button>
+              </div>
+              <button type="button" class="btn w20 tall" id="info4RemoveBtn" title="Remove this info block">&ndash;</button>
+            </div>
+          </div>
+          <div class="row field">
+            <span class="lbl">Image</span>
+            <div class="seg">
+              <button type="button" class="btn" id="imageLoadBtn" title="A photo or an MP4; or drop one on the preview">Load</button>
+              <div class="stepper" id="videoStartStepper" hidden title="Where in the video the loop starts, in seconds">
+                <button type="button" class="btn w20" data-dir="-1">&ndash;</button>
+                <input type="text" class="w45" id="videoStartText" spellcheck="false" value="0s" />
+                <button type="button" class="btn w20" data-dir="1">+</button>
+              </div>
+              <button type="button" class="btn" id="imageRemoveBtn" disabled>Remove</button>
+            </div>
+          </div>
+          <div class="row field" id="bgRow">
+            <span class="lbl">BG</span>
+            <div class="seg bg-swatches" id="bgSeg" title="The card's colour when there is no photo (click again to clear)"></div>
+          </div>
+          <div class="row field">
+            <span class="lbl">Music</span>
+            <div class="seg">
+              <button type="button" class="btn" id="audioLoadBtn" title="An MP3; drag the strip above the card to set where it starts">Load</button>
+              <button type="button" class="btn" id="audioRemoveBtn" disabled>Remove</button>
+            </div>
+          </div>
+          <div class="row field">
+            <span class="lbl">Loops</span>
+            <div class="seg" id="loopsSeg" title="How many times the loop plays in the MP4, for longer music">
+              <button type="button" class="btn active" data-loops="1">1x</button>
+              <button type="button" class="btn" data-loops="2">2x</button>
+              <button type="button" class="btn" data-loops="4">4x</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="group" id="logoGroup">
+          <div class="row field" id="logoRow">
+            <span class="lbl">Logo</span>
+            <div class="seg" id="logoSeg">
+              <button type="button" class="btn active" data-logo="off">Off</button>
+              <button type="button" class="btn" data-logo="top">Top</button>
+              <button type="button" class="btn" data-logo="bottom">Bottom</button>
+            </div>
+          </div>
+          <div class="row field" id="logoColorRow" hidden>
+            <span class="lbl">Colour</span>
+            <div class="seg" id="logoColorSeg">
+              <button type="button" class="btn" data-logocolor="white">White</button>
+              <button type="button" class="btn active" data-logocolor="black">Black</button>
+            </div>
+          </div>
+          <div class="row field" id="logoStyleRow" hidden>
+            <span class="lbl">Lockup</span>
+            <div class="seg" id="logoStyleSeg">
+              <button type="button" class="btn" data-logostyle="basic">Basic</button>
+              <button type="button" class="btn" data-logostyle="10years">10 Years</button>
+              <button type="button" class="btn" data-logostyle="full">Full</button>
+              <button type="button" class="btn" data-logostyle="icon" title="The TMB icon as a block, sized and padded like the small text blocks">Icon</button>
+            </div>
+          </div>
+          <div class="row field" id="logoPosRow" hidden>
+            <span class="lbl">Pos</span>
+            <div class="seg" id="iconPosSeg">
+              <button type="button" class="btn" data-iconpos="lt" title="Top left corner">LT</button>
+              <button type="button" class="btn" data-iconpos="rt" title="Top right corner">RT</button>
+              <button type="button" class="btn" data-iconpos="lb" title="Bottom left corner">LB</button>
+              <button type="button" class="btn" data-iconpos="rb" title="Bottom right corner">RB</button>
+              <button type="button" class="btn active" data-iconpos="inline" title="A block in the stack with the other text blocks; drag it on the preview like any block">Inline</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="group" id="styleGroup" hidden>
+          <div class="row field" id="styleRow">
+            <span class="lbl">Style</span>
+            <div class="seg" id="styleSeg">
+              <button type="button" class="btn active" data-style="row" title="Strip rows at the top and bottom edges">Rows</button>
+              <button type="button" class="btn" data-style="page" title="The closed card: rows over the whole card, text on top">Full-Page</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="group" id="blocksGroup"></section>
+
+        <section class="group" id="timingGroup"></section>
+
+        <section class="group" id="shapeGroup">
+          <div class="seg" id="orderSeg">
+            <button type="button" class="btn" data-order="top">Top</button>
+            <button type="button" class="btn" data-order="bottom">Bottom</button>
+            <button type="button" class="btn active" data-order="center">Centre</button>
+          </div>
+        </section>
+
+        <section class="group" id="rowsGroup"></section>
+
+        <section class="group" id="floatGroup"></section>
+
+        <section class="group" id="colorGroup"></section>
+
+        <section class="group" id="exportGroup">
+          <div class="seg">
+            <button type="button" class="btn" id="saveBtn" title="Save everything, photo or video and music included, as a .touquet file">Save</button>
+            <button type="button" class="btn" id="loadBtn" title="Open a .touquet file (or drop one on the preview)">Load</button>
+          </div>
+          <div class="seg">
+            <button type="button" class="btn" id="exportMp4Btn" title="One full loop as H.264 MP4, 1080 wide at 60 fps">Export MP4</button>
+            <button type="button" class="btn" id="exportPngBtn" title="The frame shown in the preview; transparent where there is no photo">Export PNG</button>
+          </div>
+          <div class="seg">
+            <button type="button" class="btn" id="indesignBtn" title="The frame shown in the preview as an InDesign file (IDML) with the photo in a Links folder and a bleed; everything stays editable">Export InDesign</button>
+            <button type="button" class="btn" id="illustratorBtn" title="The frame shown in the preview as an SVG for Illustrator: photo, strips, logo vectors and editable text, with a bleed">Export Illustrator</button>
+            <button type="button" class="btn" id="figmaBtn">Export Figma</button>
+          </div>
+        </section>
+      </aside>
+    </div>
+
+    <pre id="bootError" hidden></pre>
+    <script>
+      // if the app fails to start, say so on the page (a code layer has no console)
+      window.addEventListener("error", function (e) {
+        var el = document.getElementById("bootError");
+        if (el) { el.hidden = false; el.textContent = "Error: " + (e.message || e.type); }
+      });
+      window.addEventListener("unhandledrejection", function (e) {
+        var el = document.getElementById("bootError");
+        if (el) { el.hidden = false; el.textContent = "Error: " + (e.reason && e.reason.message ? e.reason.message : e.reason); }
+      });
+    </script>
+  </body>
+</html>
